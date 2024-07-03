@@ -47,11 +47,11 @@ class HUD(object):
     def __init__(self, width, height):
         self.dim = (width, height)
         font = pygame.font.Font(pygame.font.get_default_font(), 20)
-        fonts = [x for x in pygame.font.get_fonts() if "mono" in x]
-        default_font = "ubuntumono"
-        mono = default_font if default_font in fonts else fonts[0]
-        mono = pygame.font.match_font(mono)
-        self._font_mono = pygame.font.Font(mono, 14)
+        fonts = [x for x in pygame.font.get_fonts() if "arial" in x]
+        default_font = "arial"
+        arial = default_font if default_font in fonts else fonts[0]
+        arial = pygame.font.match_font(arial)
+        self._font_arial = pygame.font.Font(arial, 14)
         self._notifications = FadingText(font, (width, 40), (0, height - 40))
         self.server_fps = 0
         self.frame = 0
@@ -178,7 +178,7 @@ class HUD(object):
                     pygame.draw.rect(display, (255, 255, 255), rect)
                 item = item[0]
             if item:  # At this point has to be a str
-                surface = self._font_mono.render(item, True, (255, 255, 255))
+                surface = self._font_arial.render(item, True, (255, 255, 255))
                 display.blit(surface, (8, v_offset))
             v_offset += 18
 

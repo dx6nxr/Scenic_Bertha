@@ -52,7 +52,7 @@ try:
     from scenic.simulators.carla.simulator import CarlaSimulator    # for use in scenarios
     from scenic.simulators.carla.actions import *
     from scenic.simulators.carla.actions import _CarlaVehicle, _CarlaPedestrian
-    import scenic.simulators.carla.utils.utils as _utils
+    import scenic.simulators.carla.utils.utils as utils
 except ModuleNotFoundError:
     # for convenience when testing without the carla package
     from scenic.core.simulators import SimulatorInterfaceWarning
@@ -142,10 +142,10 @@ class CarlaActor(DrivingObject):
         return self._control
 
     def setPosition(self, pos, elevation):
-        self.carlaActor.set_location(_utils.scenicToCarlaLocation(pos, elevation))
+        self.carlaActor.set_location(utils.scenicToCarlaLocation(pos, elevation))
 
     def setVelocity(self, vel):
-        cvel = _utils.scenicToCarlaVector3D(*vel)
+        cvel = utils.scenicToCarlaVector3D(*vel)
         if hasattr(self.carlaActor, 'set_target_velocity'):
             self.carlaActor.set_target_velocity(cvel)
         else:
@@ -218,7 +218,7 @@ class Pedestrian(Pedestrian, CarlaActor, Walks, _CarlaPedestrian):
 
     def setWalkingDirection(self, heading):
         direction = Vector(0, 1, 0).rotatedBy(heading)
-        self.control.direction = _utils.scenicToCarlaVector3D(*direction)
+        self.control.direction = utils.scenicToCarlaVector3D(*direction)
 
     def setWalkingSpeed(self, speed):
         self.control.speed = speed
@@ -404,11 +404,11 @@ def withinDistanceToTrafficLight(vehicle, thresholdDistance):
 def getClosestTrafficLightStatus(vehicle, distance=100):
     traffic_light = _getClosestTrafficLight(vehicle, distance)
     if traffic_light is not None:
-        return _utils.carlaToScenicTrafficLightStatus(traffic_light.state)
+        return utils.carlaToScenicTrafficLightStatus(traffic_light.state)
     return "None"
 
 def setClosestTrafficLightStatus(vehicle, color, distance=100):
-    color = _utils.scenicToCarlaTrafficLightStatus(color)
+    color = utils.scenicToCarlaTrafficLightStatus(color)
     if color is None:
         raise RuntimeError('Color must be red/yellow/green/off/unknown.')
     
