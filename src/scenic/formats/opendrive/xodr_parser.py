@@ -222,6 +222,7 @@ class Lane:
         self.left_bounds = []  # to be filled in later
         self.right_bounds = []
         self.centerline = []
+        self.rightDrivingEdge = []
         self.parent_lane_poly = None
 
     def width_at(self, s):
@@ -545,11 +546,17 @@ class Road:
                                 cur_p[0] + normal_vec[0] * halfway,
                                 cur_p[1] + normal_vec[1] * halfway,
                             ]
+                            #make a list of points rightDrivingEdge that will be 0.5m to the right of the centerline
+                            rightDrivingEdge = [
+                                centerline[0] - normal_vec[0] * 0.8,
+                                centerline[1] - normal_vec[1] * 0.8,
+                            ]
                             left_bounds[id_].append(left_bound)
                             right_bounds[id_].append(right_bound)
                             lane.left_bounds.append(left_bound)
                             lane.right_bounds.append(right_bound)
                             lane.centerline.append(centerline)
+                            lane.rightDrivingEdge.append(rightDrivingEdge)
             assert len(cur_sec_points) >= 2, i
             sec_points.append(cur_sec_points)
             sec_polys.append(buffer_union(cur_sec_polys, tolerance=tolerance))
@@ -697,7 +704,7 @@ class Road:
                         pred = None
                 else:
                     pred = lane.pred  # will correct inter-road links later
-                left, center, right = lane.left_bounds, lane.centerline, lane.right_bounds
+                left, center, right, rightEdge = lane.left_bounds, lane.centerline, lane.right_bounds, lane.rightDrivingEdge
                 if id_ > 0:  # backward lane
                     left, center, right = right[::-1], center[::-1], left[::-1]
                     succ, pred = pred, succ
@@ -707,6 +714,7 @@ class Road:
                     centerline=PolylineRegion(cleanChain(center)),
                     leftEdge=PolylineRegion(cleanChain(left)),
                     rightEdge=PolylineRegion(cleanChain(right)),
+                    rightDrivingEdge=PolylineRegion(cleanChain(rightEdge)),
                     successor=succ,
                     predecessor=pred,
                     lane=None,  # will set these later
@@ -724,6 +732,7 @@ class Road:
                 centerline=PolylineRegion(cleanChain(pts)),
                 leftEdge=PolylineRegion(cleanChain(sec.left_edge)),
                 rightEdge=PolylineRegion(cleanChain(sec.right_edge)),
+                rightDrivingEdge=PolylineRegion(cleanChain(sec.right_edge)),
                 successor=None,
                 predecessor=last_section,
                 road=None,  # will set later
@@ -806,6 +815,7 @@ class Road:
                 centerline=centerline,
                 leftEdge=leftEdge,
                 rightEdge=rightEdge,
+                rightDrivingEdge=rightEdge,
                 road=None,
                 crossings=(),  # TODO add crosswalks
             )
@@ -827,6 +837,7 @@ class Road:
                 centerline=centerline,
                 leftEdge=leftEdge,
                 rightEdge=rightEdge,
+                rightDrivingEdge=rightEdge,
                 road=None,
             )
             allElements.append(shoulder)
@@ -922,14 +933,17 @@ class Road:
 
                     if not forward:
                         sections = tuple(reversed(sections))
-                    leftPoints, rightPoints, centerPoints = [], [], []
+                    leftPoints, rightPoints, centerPoints, rightDrivingEdge = [], [], [], []
                     for section in sections:
                         leftPoints.extend(section.leftEdge.points)
                         rightPoints.extend(section.rightEdge.points)
                         centerPoints.extend(section.centerline.points)
+                        rightDrivingEdge.extend(section.rightDrivingEdge.points)
+                        
                     leftEdge = PolylineRegion(cleanChain(leftPoints))
                     rightEdge = PolylineRegion(cleanChain(rightPoints))
                     centerline = PolylineRegion(cleanChain(centerPoints))
+                    rightDrivingEdge = PolylineRegion(cleanChain(rightDrivingEdge))
                     lane = roadDomain.Lane(
                         id=f"road{self.id_}_lane{nextID}",
                         polygon=ls.parent_lane_poly,
@@ -939,6 +953,7 @@ class Road:
                         group=None,
                         road=None,
                         sections=tuple(sections),
+                        rightDrivingEdge = rightDrivingEdge,
                         successor=successorLane,  # will correct inter-road links later
                     )
                     nextID += 1
@@ -993,6 +1008,7 @@ class Road:
                 centerline=centerline,
                 leftEdge=leftEdge,
                 rightEdge=rightEdge,
+                rightDrivingEdge=rightEdge,
                 road=None,
                 lanes=tuple(forwardLanes),
                 curb=(forwardShoulder.rightEdge if forwardShoulder else rightEdge),
@@ -1014,6 +1030,7 @@ class Road:
                 centerline=centerline,
                 leftEdge=leftEdge,
                 rightEdge=rightEdge,
+                rightDrivingEdge=rightEdge,
                 road=None,
                 lanes=tuple(backwardLanes),
                 curb=(backwardShoulder.rightEdge if backwardShoulder else rightEdge),
@@ -1058,6 +1075,7 @@ class Road:
             centerline=centerline,
             leftEdge=leftEdge,
             rightEdge=rightEdge,
+            rightDrivingEdge=rightEdge,
             lanes=lanes,
             forwardLanes=forwardGroup,
             backwardLanes=backwardGroup,
