@@ -176,7 +176,7 @@ behavior FollowLaneRightEdgeBehavior(target_speed = 10, laneToFollow=None, is_op
     entering_intersection = False # assumption that the agent is not instantiated within an intersection
     end_lane = None
     original_target_speed = target_speed
-    TARGET_SPEED_FOR_TURNING = 5 # KM/H
+    TARGET_SPEED_FOR_TURNING = target_speed # KM/H
     TRIGGER_DISTANCE_TO_SLOWDOWN = 10 # FOR TURNING AT INTERSECTIONS
 
     if current_lane.maneuvers != ():
@@ -223,9 +223,9 @@ behavior FollowLaneRightEdgeBehavior(target_speed = 10, laneToFollow=None, is_op
             if current_lane.maneuvers != ():
                 nearby_intersection = current_lane.maneuvers[0].intersection
                 if nearby_intersection == None:
-                    nearby_intersection = current_lane.rightDrivingEdge[-1]
+                    nearby_intersection = current_lane.rightDrivingEdge
             else:
-                nearby_intersection = current_lane.rightDrivingEdge[-1]
+                nearby_intersection = current_lane.rightDrivingEdge
 
             if select_maneuver.type != ManeuverType.STRAIGHT:
                 in_turning_lane = True
@@ -241,7 +241,6 @@ behavior FollowLaneRightEdgeBehavior(target_speed = 10, laneToFollow=None, is_op
             target_speed = original_target_speed
             _lon_controller, _lat_controller = simulation().getLaneFollowingControllers(self)
 
-        #using a for loop get a points on the middle of the lane with method pointAlongBy every 0.1, create a point that is 0.5 meters to the right a then create a PolylineRegion out of them
         nearest_line_points = current_centerline.nearestSegmentTo(self.position)
         nearest_line_segment = PolylineRegion(nearest_line_points)
         cte = nearest_line_segment.signedDistanceTo(self.position)
