@@ -170,7 +170,7 @@ behavior FollowLaneRightEdgeBehavior(target_speed = 10, laneToFollow=None, is_op
     else:
         current_lane = laneToFollow
 
-    current_centerline = current_lane.rightDrivingEdge  
+    current_rightEdge = current_lane.rightDrivingEdge  
     in_turning_lane = False # assumption that the agent is not instantiated within a connecting lane
     intersection_passed = False
     entering_intersection = False # assumption that the agent is not instantiated within an intersection
@@ -212,10 +212,10 @@ behavior FollowLaneRightEdgeBehavior(target_speed = 10, laneToFollow=None, is_op
 
             # assumption: there always will be a maneuver
             if select_maneuver.connectingLane != None:
-                current_centerline = concatenateCenterlines([current_centerline, select_maneuver.connectingLane.rightDrivingEdge, \
+                current_rightEdge = concatenateCenterlines([current_rightEdge, select_maneuver.connectingLane.rightDrivingEdge, \
                     select_maneuver.endLane.rightDrivingEdge])
             else:
-                current_centerline = concatenateCenterlines([current_centerline, select_maneuver.endLane.rightDrivingEdge])
+                current_rightEdge = concatenateCenterlines([current_rightEdge, select_maneuver.endLane.rightDrivingEdge])
 
             current_lane = select_maneuver.endLane
             end_lane = current_lane
@@ -231,7 +231,7 @@ behavior FollowLaneRightEdgeBehavior(target_speed = 10, laneToFollow=None, is_op
                 in_turning_lane = True
                 target_speed = TARGET_SPEED_FOR_TURNING
 
-                do TurnBehavior(trajectory = current_centerline)
+                do TurnBehavior(trajectory = current_rightEdge)
 
 
         if (end_lane is not None) and (self.position in end_lane) and not intersection_passed:
@@ -241,7 +241,7 @@ behavior FollowLaneRightEdgeBehavior(target_speed = 10, laneToFollow=None, is_op
             target_speed = original_target_speed
             _lon_controller, _lat_controller = simulation().getLaneFollowingControllers(self)
 
-        nearest_line_points = current_centerline.nearestSegmentTo(self.position)
+        nearest_line_points = current_rightEdge.nearestSegmentTo(self.position)
         nearest_line_segment = PolylineRegion(nearest_line_points)
         cte = nearest_line_segment.signedDistanceTo(self.position)
         if is_oppositeTraffic:

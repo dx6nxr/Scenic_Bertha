@@ -556,7 +556,7 @@ class Road:
                                 centerline[0] + normal_vec[0],
                                 centerline[1] + normal_vec[1],
                             ]
-                            if id_ < 0:
+                            if not id_ < 0:
                                 leftDrivingEdge, rightDrivingEdge = rightDrivingEdge, leftDrivingEdge
                             left_bounds[id_].append(left_bound)
                             right_bounds[id_].append(right_bound)
