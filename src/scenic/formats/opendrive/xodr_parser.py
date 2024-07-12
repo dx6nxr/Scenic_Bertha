@@ -2,6 +2,7 @@
 
 import abc
 from collections import defaultdict
+from distutils.command import clean
 import itertools
 import math
 import warnings
@@ -547,7 +548,6 @@ class Road:
                                 cur_p[0] + normal_vec[0] * halfway,
                                 cur_p[1] + normal_vec[1] * halfway,
                             ]
-                            #make a list of points rightDrivingEdge that will be 0.5m to the right of the centerline
                             rightDrivingEdge = [
                                 centerline[0] - normal_vec[0],
                                 centerline[1] - normal_vec[1],
@@ -718,7 +718,7 @@ class Road:
                     pred = lane.pred  # will correct inter-road links later
                 left, center, right, rightEdge, leftEdge = lane.left_bounds, lane.centerline, lane.right_bounds, lane.rightDrivingEdge, lane.leftDrivingEdge
                 if id_ > 0:  # backward lane
-                    left, center, right = right[::-1], center[::-1], left[::-1]
+                    left, center, right, rightEdge, leftEdge = right[::-1], center[::-1], left[::-1], rightEdge[::-1], leftEdge[::-1]
                     succ, pred = pred, succ
                 section = roadDomain.LaneSection(
                     id=f"road{self.id_}_sec{len(roadSections)}_lane{id_}",

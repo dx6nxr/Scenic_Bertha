@@ -182,9 +182,9 @@ behavior FollowLaneRightEdgeBehavior(target_speed = 10, laneToFollow=None, is_op
     if current_lane.maneuvers != ():
         nearby_intersection = current_lane.maneuvers[0].intersection
         if nearby_intersection == None:
-            nearby_intersection = current_lane.rightDrivingEdge[-1]
+            nearby_intersection = current_lane.rightDrivingEdge
     else:
-        nearby_intersection = current_lane.rightDrivingEdge[-1]
+        nearby_intersection = current_lane.rightDrivingEdge
     
     # instantiate longitudinal and lateral controllers
     _lon_controller, _lat_controller = simulation().getLaneFollowingControllers(self)
@@ -260,7 +260,7 @@ behavior FollowLaneRightEdgeBehavior(target_speed = 10, laneToFollow=None, is_op
         past_speed = current_speed
 
 
-behavior FollowTrajectoryBehavior(target_speed = 10, trajectory = None, turn_speed=None):
+behavior FollowTrajectoryBehavior(target_speed = 10, trajectory = None, turn_speed=None, side='center'):
     """ 
     Follows the given trajectory. The behavior terminates once the end of the trajectory is reached.
 
@@ -276,7 +276,14 @@ behavior FollowTrajectoryBehavior(target_speed = 10, trajectory = None, turn_spe
     brakeIntensity = 1.0
     distanceToEndpoint = 5 # meters
 
-    traj_centerline = [traj.centerline for traj in trajectory]
+    if side == 'center':
+        traj_centerline = [traj.centerline for traj in trajectory]
+    elif side == 'right':
+        traj_centerline = [traj.rightDrivingEdge for traj in trajectory]
+    elif side == 'left':
+        traj_centerline = [traj.leftDrivingEdge for traj in trajectory]
+    else:
+        raise ValueError("side should be either 'center', 'right', or 'left'")
     trajectory_centerline = concatenateCenterlines(traj_centerline)
 
     # instantiate longitudinal and lateral controllers

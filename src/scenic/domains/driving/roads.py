@@ -1360,8 +1360,8 @@ class Network:
                 )
         for lane in self.lanes:  # draw centerlines of all lanes (including connecting)
             lane.centerline.show(plt, style=":", color="#A0A0A0")
-            lane.rightDrivingEdge.show(plt, style=":", color="#A5A5A5")
-            lane.leftDrivingEdge.show(plt, style=":", color="#000000")
+            lane.rightDrivingEdge.show(plt, style=":", color="#FF0000")
+            lane.leftDrivingEdge.show(plt, style=":", color="#0000FF")
         self.intersectionRegion.show(plt, style="g")
         if labelIncomingLanes:
             for intersection in self.intersections:
