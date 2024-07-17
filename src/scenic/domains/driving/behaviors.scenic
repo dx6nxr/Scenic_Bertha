@@ -142,10 +142,19 @@ behavior FollowLaneBehavior(target_speed = 10, laneToFollow=None, is_oppositeTra
         # compute throttle : Longitudinal Control
         throttle = _lon_controller.run_step(speed_error)
 
-        # compute steering : Lateral Control
-        current_steer_angle = _lat_controller.run_step(cte)
+       # Initialize smoothed_steer_angle somewhere in your code, possibly the same as the initial steer angle
+        smoothed_steer_angle = 0  # Example initialization
 
-        take RegulatedControlAction(throttle, current_steer_angle, past_steer_angle)
+        # Define the smoothing factor
+        alpha = 0.8  # Example value, adjust based on testing
+
+        # Inside your loop or function where you update the steering angle
+        current_steer_angle = _lat_controller.run_step(cte)
+        smoothed_steer_angle = alpha * current_steer_angle + (1 - alpha) * smoothed_steer_angle
+
+        # Use smoothed_steer_angle for steering actions
+
+        take RegulatedControlAction(throttle, smoothed_steer_angle, past_steer_angle)
         past_steer_angle = current_steer_angle
         past_speed = current_speed
 
