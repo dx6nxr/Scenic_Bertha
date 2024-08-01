@@ -330,6 +330,73 @@ behavior FollowTrajectoryBehavior(target_speed = 10, trajectory = None, turn_spe
         take RegulatedControlAction(throttle, current_steer_angle, past_steer_angle)
         past_steer_angle = current_steer_angle
 
+behavior FollowTrajectoryConstantThrottleBehavior(target_speed = 10, trajectory = None, turn_speed=None, side='center', throttle=0.5):
+    """ 
+    Follows the given trajectory. The behavior terminates once the end of the trajectory is reached.
+
+    :param target_speed: Its unit is in m/s. By default, it is set to 10 m/s
+    :param trajectory: It is a list of sequential lanes to track, from the lane that the vehicle is initially on to the lane it should end up on.  
+    """
+
+    assert trajectory is not None
+    assert isinstance(trajectory, list)
+
+    #find where the vehicle is on the trajectory
+    current_lane = self.lane
+    if current_lane != None:
+        for i in range(len(trajectory)-1):
+            if current_lane == trajectory[i]:
+                trajectory = trajectory[i:]
+
+    if turn_speed is None:
+        turn_speed = target_speed / 2
+
+    brakeIntensity = 1.0
+    distanceToEndpoint = 5 # meters
+
+    if side == 'center':
+        traj_centerline = [traj.centerline for traj in trajectory]
+    elif side == 'right':
+        traj_centerline = [traj.rightDrivingEdge for traj in trajectory]
+    elif side == 'left':
+        traj_centerline = [traj.leftDrivingEdge for traj in trajectory]
+    else:
+        raise ValueError("side should be either 'center', 'right', or 'left'")
+    trajectory_centerline = concatenateCenterlines(traj_centerline)
+
+    # instantiate longitudinal and lateral controllers
+    _lon_controller,_lat_controller = simulation().getLaneFollowingControllers(self)
+    past_steer_angle = 0
+    
+    if trajectory[-1].maneuvers:
+        end_intersection = trajectory[-1].maneuvers[0].intersection
+        if end_intersection == None:
+            end_intersection = trajectory[-1].centerline[-1]
+    else:
+        end_intersection = trajectory[-1].centerline[-1]
+
+    while True:
+        if self in _model.network.intersectionRegion:
+            do TurnBehavior(trajectory_centerline, target_speed=turn_speed)
+
+        if (distance from self to end_intersection) < distanceToEndpoint:
+            break
+
+        if self.speed is not None:
+            current_speed = self.speed
+        else:
+            current_speed = 0
+
+        cte = trajectory_centerline.signedDistanceTo(self.position)
+        speed_error = target_speed - current_speed
+
+
+        # compute steering : Latitudinal Control
+        current_steer_angle = _lat_controller.run_step(cte)
+
+        take RegulatedControlAction(throttle, current_steer_angle, past_steer_angle)
+        past_steer_angle = current_steer_angle
+
 
 
 behavior TurnBehavior(trajectory, target_speed=6):
