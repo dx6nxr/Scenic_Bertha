@@ -4,6 +4,7 @@ import abc
 from collections import defaultdict
 import itertools
 import math
+from turtle import color, left
 import warnings
 import xml.etree.ElementTree as ET
 
@@ -327,6 +328,7 @@ class Road:
         self.predecessor = None
         self.successor = None
         self.signals = []  # List of Signal objects.
+        self.crossings = []
         self.lane_secs = []  # List of LaneSection objects.
         self.ref_line = []  # List of Curve objects defining reference line.
         # NOTE: sec_points, sec_polys, sec_lane_polys should be ordered according to lane_secs.
@@ -1038,7 +1040,19 @@ class Road:
                 type=signal_.type_,
             )
             roadSignals.append(signal)
-
+        crossings = []
+        for crossing_ in self.crossings:
+            crossing = roadDomain.PedestrianCrossing(
+                id = crossing_.id_,
+                polygon = crossing_.polygon,
+                centerline = crossing_.centerline,
+                leftEdge = crossing_.leftEdge,
+                rightEdge = crossing_.rightEdge,
+                parent = None,
+                startSidewalk = None,
+                endSidewalk = None,
+            )
+            crossings.append(crossing)
         # Create road
         assert forwardGroup or backwardGroup
         if forwardGroup:
@@ -1063,7 +1077,7 @@ class Road:
             backwardLanes=backwardGroup,
             sections=roadSections,
             signals=tuple(roadSignals),
-            crossings=(),  # TODO add these!
+            crossings=crossings,  # TODO add these!
         )
         allElements.append(road)
 
@@ -1116,6 +1130,24 @@ class Signal:
     def is_valid(self):
         return self.validity is None or self.validity != [0, 0]
 
+class Crosswalk:
+    """Pedestrian crosswalks."""
+    def __init__(self, id_, name, polygon, centerline, leftEdge, rightEdge, s, t, zOffset, hdg, roll, pitch, orientation, width, length):
+        self.id_ = id_
+        self.name = name
+        self.polygon = polygon
+        self.centerline = centerline
+        self.leftEdge = leftEdge
+        self.rightEdge = rightEdge
+        self.s = s
+        self.t = t
+        self.zOffset = zOffset
+        self.hdg = hdg
+        self.roll = roll
+        self.pitch = pitch
+        self.orientation = orientation
+        self.width = width
+        self.length = length
 
 class SignalReference:
     def __init__(self, id_, orientation, validity=None):
@@ -1340,6 +1372,107 @@ class RoadMap:
             signal_elem.get("subtype"),
             signal_elem.get("orientation"),
             self.__parse_signal_validity(signal_elem.find("validity")),
+        )
+        
+    def __parse_crosswalk(self, crosswalk_elem):
+        s = float(crosswalk_elem.get("s")),
+        print (s[0])
+        t = float(crosswalk_elem.get("t")),
+        print(t[0])
+        geom = crosswalk_elem.find("outline")
+        points = []
+        for point in geom.findall("cornerLocal"):
+            u,v,z = float(point.get("u")), float(point.get("v")), 0
+            u += s[0]
+            v += t[0]
+            #print (u,v,z)
+            points.append((u,v,z))
+        crosswalk_region = Polygon(points)
+        
+        def calculate_angle(A, B, C):
+            """Calculate the angle ABC (in degrees) given three points A, B, and C."""
+            AB = np.array(B) - np.array(A)
+            BC = np.array(C) - np.array(B)
+            cosine_angle = np.dot(AB, BC) / (np.linalg.norm(AB) * np.linalg.norm(BC))
+            angle = np.arccos(np.clip(cosine_angle, -1, 1))  # Clip for numerical stability
+            return np.degrees(angle)
+        
+        def find_longer_edges(polygon):
+            """Find the two longest edges of a polygon."""
+            edges = []
+            coords = polygon.exterior.coords
+            if len(coords) > 5:
+                for i in range(len(coords) - 2):  # Adjust loop to ensure we have three points
+                    A, B, C = coords[i], coords[i + 1], coords[i + 2]
+                    angle = calculate_angle(A, B, C)
+                    if angle < 10:
+                        edges.append((A, B, C))
+            else:
+                edges.append((coords[1], coords[2]))
+                edges.append((coords[3], coords[4]))
+            return edges
+        
+        #find the centers of the shorter edges, which consist of 2 points
+        def find_centerline(polygon):
+            edges = []
+            coords = polygon.exterior.coords
+            for i in range(len(coords) - 1):
+                A, B = coords[i], coords[i + 1]
+                distance = np.sqrt((B[0] - A[0])**2 + (B[1] - A[1])**2)
+                edges.append((A, B, distance))
+            #find the two shortest edges
+            edges.sort(key=lambda x: x[2])
+            shorter_edges = edges[:2]
+            #find the centers of the shorter edges
+            centers = []
+            for edge in shorter_edges:
+                center = ((edge[0][0] + edge[1][0]) / 2, (edge[0][1] + edge[1][1]) / 2)
+                centers.append(center)
+            return centers                 
+        
+        leftEdge, rightEdge = find_longer_edges(crosswalk_region)
+        centerline = find_centerline(crosswalk_region)
+                    
+        ##### Plotting crosswalk region with numbered points for debug #####
+        """
+        import matplotlib.pyplot as plt
+
+        plt.figure(figsize=(10, 7))  # Optional: Adjust figure size
+        plt.plot(*crosswalk_region.exterior.xy, marker='o')  # Plot polygon
+        #plot the left and right edges
+        plt.plot(*zip(*leftEdge), color='red')
+        plt.plot(*zip(*rightEdge), color='purple')
+        plt.plot(*zip(*centerline), color='pink')
+        
+        # Highlight and number each building point
+        for idx, (x, y, z) in enumerate(points):
+            plt.scatter(x, y, color='red')  # Highlight point
+            plt.text(x, y, f' {idx+1}', color='blue', fontsize=12)  # Number point
+
+
+        plt.xlabel('U Coordinate')
+        plt.ylabel('V Coordinate')
+        plt.title('Crosswalk Region with Numbered Points')
+        plt.grid(True)  # Optional: Show grid
+        plt.axis('equal')  # Optional: Ensure aspect ratio is equal
+        plt.show()
+        """
+        return Crosswalk(
+            crosswalk_elem.get("id"),
+            crosswalk_elem.get("name"),
+            crosswalk_region,
+            PolylineRegion(cleanChain(centerline)),
+            PolylineRegion(cleanChain(leftEdge)),
+            PolylineRegion(cleanChain(rightEdge)),
+            s,
+            t,
+            crosswalk_elem.get("zOffset"),
+            crosswalk_elem.get("hdg"),
+            crosswalk_elem.get("roll"),
+            crosswalk_elem.get("pitch"),
+            crosswalk_elem.get("orientation"),
+            crosswalk_elem.get("width"),
+            crosswalk_elem.get("length"),
         )
 
     def __parse_signal_reference(self, signal_reference_elem):
@@ -1597,6 +1730,15 @@ class RoadMap:
                             signalReference.validity,
                         )
                         road.signals.append(signal)
+                        
+            # added code for parsing the crosswalks
+            crosswalks = r.find("objects")
+            if crosswalks is not None: 
+                for crosswalk_elem in crosswalks.iter("object"):
+                    if crosswalk_elem.get("type") == "crosswalk":
+                        crosswalk = self.__parse_crosswalk(crosswalk_elem)
+                        road.crossings.append(crosswalk)
+            #print ("road:", road.id_, "crosswalks:", numvber, road.crossings)
 
             if len(road.lane_secs) > 1:
                 popLastSectionIfShort(road.length - s)
@@ -1838,7 +1980,7 @@ class RoadMap:
                 outgoingLanes=cyclicOrder(allOutgoingLanes, contactStart=True),
                 maneuvers=tuple(allManeuvers),
                 signals=tuple(allSignals),
-                crossings=(),  # TODO add these
+                crossings=[road.crossings for road in allRoads],  # TODO add these
             )
             register(intersection)
             intersections[jid] = intersection

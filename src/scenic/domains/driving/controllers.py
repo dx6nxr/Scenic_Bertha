@@ -77,7 +77,7 @@ class PIDLateralController:
         self.DTerm = 0
         self.dt = dt
         self.last_error = 0
-        self.windup_guard = 20.0
+        self.windup_guard = 0.0
         self.output = 0
 
     def run_step(self, cte):

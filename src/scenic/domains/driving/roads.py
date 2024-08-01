@@ -22,6 +22,7 @@ import pathlib
 import pickle
 import struct
 import time
+from turtle import color
 from typing import FrozenSet, List, Optional, Sequence, Tuple, Union
 import weakref
 
@@ -1309,11 +1310,18 @@ class Network:
 
         self.walkableRegion.show(plt, style="-", color="#00A0FF")
         self.shoulderRegion.show(plt, style="-", color="#606060")
+        number = 0
         for road in self.roads:
             road.show(plt, style="r-")
+            print (road.crossings)
+            for crossing in road.crossings:
+                number+=1
+                crossing.centerline.show(plt, style="r--", color="#00FF00")
+                crossing.leftEdge.show(plt, style="r--", color="#00FF00")
+                crossing.rightEdge.show(plt, style="r--", color="#00FF00")
             for lane in road.lanes:  # will loop only over lanes of main roads
-                lane.leftEdge.show(plt, style="r--")
-                lane.rightEdge.show(plt, style="r--")
+                #lane.leftEdge.show(plt, style="r--")
+                #lane.rightEdge.show(plt, style="r--")
 
                 # Draw arrows indicating road direction
                 if lane.centerline.length >= 40:
@@ -1335,8 +1343,15 @@ class Network:
                     units="dots",
                     color="#A0A0A0",
                 )
+<<<<<<< Updated upstream
         for lane in self.lanes:  # draw centerlines of all lanes (including connecting)
             lane.centerline.show(plt, style=":", color="#A0A0A0")
+=======
+        #for lane in self.lanes:  # draw centerlines of all lanes (including connecting)
+            #lane.centerline.show(plt, style=":", color="#A0A0A0")
+            #lane.rightDrivingEdge.show(plt, style=":", color="#FF0000")
+            #lane.leftDrivingEdge.show(plt, style=":", color="#0000FF")
+>>>>>>> Stashed changes
         self.intersectionRegion.show(plt, style="g")
         if labelIncomingLanes:
             for intersection in self.intersections:
@@ -1344,3 +1359,5 @@ class Network:
                     x, y, _ = lane.centerline[-1]
                     plt.plot([x], [y], "*b")
                     plt.annotate(str(i), (x, y))
+        #print out the number of crossings
+        print("Number of crossings: ", number)
