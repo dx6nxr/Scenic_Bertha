@@ -39,7 +39,7 @@ behavior WalkForwardBehavior():
 behavior ConstantThrottleBehavior(x):
     take SetThrottleAction(x)
 
-behavior FollowLaneBehavior(target_speed = 10, laneToFollow=None, is_oppositeTraffic=False):
+behavior FollowLaneBehavior(target_speed = 10, laneToFollow=None, turn_speed=None, is_oppositeTraffic=False):
     """ 
     Follow's the lane on which the vehicle is at, unless the laneToFollow is specified.
     Once the vehicle reaches an intersection, by default, the vehicle will take the straight route.
@@ -66,7 +66,10 @@ behavior FollowLaneBehavior(target_speed = 10, laneToFollow=None, is_oppositeTra
     entering_intersection = False # assumption that the agent is not instantiated within an intersection
     end_lane = None
     original_target_speed = target_speed
-    TARGET_SPEED_FOR_TURNING = 5 # KM/H
+    if turn_speed is None:
+        TARGET_SPEED_FOR_TURNING = target_speed / 2
+    else:
+        TARGET_SPEED_FOR_TURNING = 5 # KM/H
     TRIGGER_DISTANCE_TO_SLOWDOWN = 10 # FOR TURNING AT INTERSECTIONS
 
     if current_lane.maneuvers != ():
@@ -378,6 +381,7 @@ behavior FollowTrajectoryConstantThrottleBehavior(target_speed = 10, trajectory 
     while True:
         if self in _model.network.intersectionRegion:
             do TurnBehavior(trajectory_centerline, target_speed=turn_speed)
+            throttle = throttle / 2
 
         if (distance from self to end_intersection) < distanceToEndpoint:
             break
