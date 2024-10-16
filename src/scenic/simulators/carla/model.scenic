@@ -415,3 +415,15 @@ def setClosestTrafficLightStatus(vehicle, color, distance=100):
     traffic_light = _getClosestTrafficLight(vehicle, distance)
     if traffic_light is not None:
         traffic_light.set_state(color)
+
+def logNearestTrafficLight(vehicle, logger, state, timestep, distance=100):
+    traffic_light = _getClosestTrafficLight(vehicle, distance)
+    if traffic_light is not None:
+        logger.logTrafficLightData(traffic_light.get_location(), timestep, state)
+
+def logIntersectionTrafficLights(intersection, logger, state, timestep):
+    for signal in intersection.signals:
+        if signal.isTrafficLight:
+            landmarks = simulation().map.get_all_landmarks_from_id(signal.openDriveID)
+            traffic_light = simulation().world.get_traffic_light(landmarks[0])
+            logger.logTrafficLightData(traffic_light.get_location(), timestep, state)
