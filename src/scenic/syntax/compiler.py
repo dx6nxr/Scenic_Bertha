@@ -236,6 +236,16 @@ TEMPORAL_PREFIX_OPS = {
 }
 
 
+class AtomicCheckTransformer(Transformer):
+    def visit_Call(self, node: ast.Call):
+        func = node.func
+        if isinstance(func, ast.Name) and func.id in TEMPORAL_PREFIX_OPS:
+            self.makeSyntaxError(
+                f'malformed use of the "{func.id}" temporal operator', node
+            )
+        return self.generic_visit(node)
+
+
 class PropositionTransformer(Transformer):
     def __init__(self, filename="<unknown>") -> None:
         super().__init__(filename)
@@ -259,6 +269,11 @@ class PropositionTransformer(Transformer):
             return wrapped, self.nextSyntaxId
         newNode = self._create_atomic_proposition_factory(node)
         return newNode, self.nextSyntaxId
+
+    def generic_visit(self, node):
+        acv = AtomicCheckTransformer(self.filename)
+        acv.visit(node)
+        return node
 
     def _register_requirement_syntax(self, syntax):
         """register requirement syntax for later use
@@ -357,14 +372,6 @@ class PropositionTransformer(Transformer):
             keywords=[],
         )
         return ast.copy_location(newNode, node)
-
-    def visit_Call(self, node: ast.Call):
-        func = node.func
-        if isinstance(func, ast.Name) and func.id in TEMPORAL_PREFIX_OPS:
-            self.makeSyntaxError(
-                f'malformed use of the "{func.id}" temporal operator', node
-            )
-        return self.generic_visit(node)
 
     def visit_Always(self, node: s.Always):
         value = self.visit(node.value)
