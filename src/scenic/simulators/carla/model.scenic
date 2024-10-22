@@ -427,3 +427,8 @@ def logIntersectionTrafficLights(intersection, logger, state, timestep):
             landmarks = simulation().map.get_all_landmarks_from_id(signal.openDriveID)
             traffic_light = simulation().world.get_traffic_light(landmarks[0])
             logger.logTrafficLightData(traffic_light.get_location(), timestep, state)
+
+def logTrafficLightCondition(actor, logger, timestep, distance=100):
+    traffic_light = _getClosestTrafficLight(actor, distance)
+    if traffic_light is not None:
+        logger.logTrafficLightCondition(traffic_light.get_location(), timestep, actor.rolename)
