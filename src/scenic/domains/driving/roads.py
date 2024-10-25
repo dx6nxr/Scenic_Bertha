@@ -22,6 +22,7 @@ import pathlib
 import pickle
 import struct
 import time
+from turtle import color
 from typing import FrozenSet, List, Optional, Sequence, Tuple, Union
 import weakref
 
@@ -1324,12 +1325,17 @@ class Network:
 
         self.walkableRegion.show(plt, style="-", color="#00A0FF")
         self.shoulderRegion.show(plt, style="-", color="#606060")
+        for crossing in self.crossings:
+            # add the crossing id to the plot
+            crossing.show(plt, style="-", color="#00FF00")
+            # also add the crossing id to the plot
+            x, y, _ = crossing.centerline[-1]
+            plt.text(x, y, crossing.uid, fontsize=8, color="#00FF00")
         for road in self.roads:
             road.show(plt, style="r-")
             for lane in road.lanes:  # will loop only over lanes of main roads
-                lane.leftEdge.show(plt, style="r--")
-                lane.rightEdge.show(plt, style="r--")
-
+                #lane.leftEdge.show(plt, style="r--")
+                #lane.rightEdge.show(plt, style="r--")
                 # Draw arrows indicating road direction
                 if lane.centerline.length >= 40:
                     pts = lane.centerline.pointsSeparatedBy(20)
