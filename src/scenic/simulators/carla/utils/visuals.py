@@ -178,7 +178,7 @@ class HUD(object):
                     pygame.draw.rect(display, (255, 255, 255), rect)
                 item = item[0]
             if item:  # At this point has to be a str
-                surface = self._font_mono.render(item, True, (255, 255, 255))
+                surface = self._font_arial.render(item, True, (255, 255, 255))
                 display.blit(surface, (8, v_offset))
             v_offset += 18
 

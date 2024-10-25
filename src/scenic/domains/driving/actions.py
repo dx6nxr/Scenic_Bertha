@@ -219,7 +219,7 @@ class RegulatedControlAction(SteeringAction):
         throttle: float,
         steer: float,
         past_steer: float,
-        max_throttle: float = 1,
+        max_throttle: float = 1.0,
         max_brake: float = 0.5,
         max_steer: float = 0.8,
     ):

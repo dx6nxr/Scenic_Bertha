@@ -422,6 +422,9 @@ class Road(LinearElement):
 
     #: All crosswalks of this road, ordered from start to end.
     crossings: Tuple[PedestrianCrossing] = ()
+    
+    rightDrivingEdge: PolylineRegion
+    leftDrivingEdge: PolylineRegion
 
     #: All sidewalks of this road, with the one adjacent to `forwardLanes` being first.
     sidewalks: Tuple[Sidewalk] = None
@@ -503,6 +506,9 @@ class LaneGroup(LinearElement):
     #: Region representing the associated curb, which is not necessarily adjacent if
     #: there are parking lanes or some other kind of shoulder.
     curb: PolylineRegion
+    
+    rightDrivingEdge: PolylineRegion
+    leftDrivingEdge: PolylineRegion
 
     # associated elements not actually part of this group
     _sidewalk: Union[Sidewalk, None] = None  #: Adjacent sidewalk, if any.
@@ -560,6 +566,9 @@ class Lane(_ContainsCenterline, LinearElement):
     group: LaneGroup  # parent lane group
     road: Road  # grandparent road
     sections: Tuple[LaneSection]  # sections in order from start to end
+    
+    rightDrivingEdge: PolylineRegion
+    leftDrivingEdge: PolylineRegion
 
     adjacentLanes: Tuple[Lane] = ()  # adjacent lanes of same type, if any
 
@@ -588,6 +597,9 @@ class RoadSection(LinearElement):
     backwardLanes: Tuple[LaneSection] = ()  # as above
 
     lanesByOpenDriveID: Dict[LaneSection]
+    
+    rightDrivingEdge: PolylineRegion
+    leftDrivingEdge: PolylineRegion
 
     def __attrs_post_init__(self):
         super().__attrs_post_init__()
@@ -649,6 +661,9 @@ class LaneSection(_ContainsCenterline, LinearElement):
     lane: Lane  #: Parent lane.
     group: LaneGroup  #: Grandparent lane group.
     road: Road  #: Great-grandparent road.
+    
+    rightDrivingEdge: PolylineRegion
+    leftDrivingEdge: PolylineRegion
 
     #: ID number as in OpenDRIVE (number of lanes to left of center, with 1 being the
     # first lane left of the centerline and -1 being the first lane to the right).
@@ -1341,10 +1356,10 @@ class Network:
                     units="dots",
                     color="#A0A0A0",
                 )
-        #for lane in self.lanes:  # draw centerlines of all lanes (including connecting)
-            #lane.centerline.show(plt, style=":", color="#A0A0A0")
-            #lane.rightDrivingEdge.show(plt, style=":", color="#FF0000")
-            #lane.leftDrivingEdge.show(plt, style=":", color="#0000FF")
+        for lane in self.lanes:  # draw centerlines of all lanes (including connecting)
+            lane.centerline.show(plt, style=":", color="#A0A0A0")
+            lane.rightDrivingEdge.show(plt, style=":", color="#FF0000")
+            lane.leftDrivingEdge.show(plt, style=":", color="#0000FF")
         self.intersectionRegion.show(plt, style="g")
         if labelIncomingLanes:
             for intersection in self.intersections:
