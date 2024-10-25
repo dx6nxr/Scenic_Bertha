@@ -8,6 +8,7 @@ from turtle import color, left
 import warnings
 import xml.etree.ElementTree as ET
 
+import matplotlib
 import numpy as np
 from scipy.integrate import quad, solve_ivp
 from scipy.optimize import brentq
@@ -91,6 +92,11 @@ class Curve:
     def point_at(self, s):
         """Get an (x, y, s) point along the curve at the given s coordinate."""
         return
+    
+    @abc.abstractmethod
+    def hdg_at(self, s):
+        """Get the heading at the given s coordinate."""
+        return
 
     def rel_to_abs(self, point):
         """Convert from relative coordinates of curve to absolute coordinates.
@@ -133,6 +139,23 @@ class Cubic(Curve):
         pt = (s, self.poly.eval_at(u), s)
         return self.rel_to_abs(pt)
 
+    def hdg_at(self, s):
+        """
+        Calculates the heading at a specific point along the cubic curve.
+
+        Args:
+            s: The distance along the curve from the starting point.
+
+        Returns:
+            The heading at the specified point.
+        """
+
+        # Find the corresponding parameter u
+        u = self.find_u_for_s(s)
+        du_du = self.poly.grad_at(u)
+        heading = np.arctan(du_du)
+        return heading
+
 
 class ParamCubic(Curve):
     """A curve defined by the parametric equations
@@ -157,6 +180,22 @@ class ParamCubic(Curve):
         pt = (self.u_poly.eval_at(p), self.v_poly.eval_at(p), s)
         return self.rel_to_abs(pt)
 
+    def hdg_at(self, s):
+        """
+        Calculates the heading at a specific point along the parametric cubic curve.
+
+        Args:
+            s: The distance along the curve from the starting point.
+
+        Returns:
+            The heading at the specified point.
+        """
+
+        p = self.find_p_for_s(s)  # Find the corresponding parameter p
+        du_dp = self.u_poly.grad_at(p)
+        dv_dp = self.v_poly.grad_at(p)
+        heading = np.arctan2(dv_dp, du_dp)
+        return heading
 
 class Clothoid(Curve):
     """An Euler spiral with curvature varying linearly between CURV0 and CURV1.
@@ -198,6 +237,34 @@ class Clothoid(Curve):
             sol = solve_ivp(clothoid_ode, (0, s), self.ode_init)
             x, y, hdg = sol.y[:, -1]
             return (x, y, s)
+        
+    def hdg_at(self, s):
+        """
+        Calculates the heading at a specific point along the clothoid curve.
+
+        Args:
+            s: The distance along the curve from the starting point.
+
+        Returns:
+            The heading at the specified point.
+        """
+        
+        if self.curv0 == self.curv1:
+            if self.curv0 == 0:
+                return self.hdg
+            else:
+                #this case causes shit to happen
+                curvature_at_s = self.curv0 + (self.curv1 - self.curv0) * s / self.length
+                radius_at_s = 1 / curvature_at_s
+                angle_at_s = s / radius_at_s
+                hdg = self.hdg + angle_at_s
+                print ("heading of the curve", self.hdg, f"heading at {s}", hdg)
+                return hdg
+        # Handle general clothoid case
+        sol = solve_ivp(self.clothoid_ode, (0, s), self.ode_init)
+        _, _, hdg = sol.y[:, -1]
+        return hdg
+
 
 
 class Line(Curve):
@@ -211,6 +278,9 @@ class Line(Curve):
 
     def point_at(self, s):
         return self.rel_to_abs((s, 0, s))
+    
+    def hdg_at(self, s):
+        return self.hdg
 
 
 class Lane:
@@ -1132,22 +1202,13 @@ class Signal:
 
 class Crosswalk:
     """Pedestrian crosswalks."""
-    def __init__(self, id_, name, polygon, centerline, leftEdge, rightEdge, s, t, zOffset, hdg, roll, pitch, orientation, width, length):
+    def __init__(self, id_, name, polygon, centerline, leftEdge, rightEdge):
         self.id_ = id_
         self.name = name
         self.polygon = polygon
         self.centerline = centerline
         self.leftEdge = leftEdge
         self.rightEdge = rightEdge
-        self.s = s
-        self.t = t
-        self.zOffset = zOffset
-        self.hdg = hdg
-        self.roll = roll
-        self.pitch = pitch
-        self.orientation = orientation
-        self.width = width
-        self.length = length
 
 class SignalReference:
     def __init__(self, id_, orientation, validity=None):
@@ -1374,105 +1435,191 @@ class RoadMap:
             self.__parse_signal_validity(signal_elem.find("validity")),
         )
         
-    def __parse_crosswalk(self, crosswalk_elem):
-        s = float(crosswalk_elem.get("s")),
-        print (s[0])
-        t = float(crosswalk_elem.get("t")),
-        print(t[0])
-        geom = crosswalk_elem.find("outline")
-        points = []
-        for point in geom.findall("cornerLocal"):
-            u,v,z = float(point.get("u")), float(point.get("v")), 0
-            u += s[0]
-            v += t[0]
-            #print (u,v,z)
-            points.append((u,v,z))
-        crosswalk_region = Polygon(points)
+    def __parse_crosswalk(self, crosswalk_elem, reference_points):
+        """
+        Parses a crosswalk element and returns its geometry in global coordinates.
+
+        Args:
+            crosswalk_elem: The XML element representing the crosswalk.
+            reference_points: A list of reference points (curves) along the road.
+
+        Returns:
+            A crosswalk object.
+        """
+        from math import radians, sin, cos
+        #print("Parsing crosswalk", crosswalk_elem.get("id"))
+        s0 = float(crosswalk_elem.get("s"))
+        t0 = float(crosswalk_elem.get("t"))
+        orient = crosswalk_elem.get("orientation")
+        width = float(crosswalk_elem.get("width"))
+        elemhdg = float(crosswalk_elem.get("hdg"))  # Heading angle is already in radians
+
+        # Find the appropriate reference point based on the crosswalk's "s" coordinate
+        for curve in reference_points:
+            if s0 < curve.length:
+                _curve = curve
+                break
+            else:
+                s0 -= curve.length
+
+        # Calculate the global coordinates of the crosswalk points
+        global_coords = []
+
+        if orient == "+":
+            hdg = _curve.hdg_at(s0 + width / 2)
+        else:
+            hdg = _curve.hdg_at(s0 - width / 2)
+            
+        print (f"Crosswalk {crosswalk_elem.get('id')} hdg", hdg, "elem heading", elemhdg, "hdg + elemhdg", elemhdg - hdg)
+
+        for point in crosswalk_elem.find("outline").findall("cornerLocal"):
+            u, v, _ = float(point.get("u")), float(point.get("v")), 0
+            
+            # v and u are swapped because crossings are rotated 90 degrees in relation to the road
+            if orient == "+":  # add the element in positive s direction
+                s = s0 + v
+                t = t0 + u
+            elif orient == "-":  # add the element in negative s direction
+                s = s0 - v
+                t = t0 - u
+
+            # Adjust the coordinates based on the element heading
+            x, y, _ = _curve.point_at(s)
+            x = x + t * sin(hdg)
+            y = y + t * cos(hdg)
+            global_coords.append((x, y))
         
-        def calculate_angle(A, B, C):
-            """Calculate the angle ABC (in degrees) given three points A, B, and C."""
-            AB = np.array(B) - np.array(A)
-            BC = np.array(C) - np.array(B)
-            cosine_angle = np.dot(AB, BC) / (np.linalg.norm(AB) * np.linalg.norm(BC))
-            angle = np.arccos(np.clip(cosine_angle, -1, 1))  # Clip for numerical stability
-            return np.degrees(angle)
-        
+        def parse_crosswalk_geometry(global_coords):
+            """
+            Parses the geometry of a crosswalk, finding the centerline, leftEdge, and rightEdge.
+
+            Args:
+                global_coords: A list of global coordinates (x, y) for the crosswalk points.
+
+            Returns:
+                A tuple containing the centerline, leftEdge, and rightEdge as LineString objects.
+            """
+
+            # Create a Polygon object from the global coordinates
+            polygon = Polygon(global_coords)
+            
+            # Find the two longest edges (left and right edges)
+            left_edge, right_edge = find_longer_edges(polygon)
+
+            # Find the centerline (connection between the centers of the shorter sides)
+            centerline = find_centerline(polygon)
+
+            return polygon, centerline, left_edge, right_edge
+
         def find_longer_edges(polygon):
-            """Find the two longest edges of a polygon."""
+            """
+            Finds the two longest edges of a polygon, handling degenerate cases.
+
+            Args:
+                polygon: A Shapely Polygon object.
+
+            Returns:
+                A tuple containing the two longest edges as LineString objects, or
+                empty LineString objects if no valid edges are found.
+            """
+
+            #if polygon.is_empty or polygon.area == 0:
+            #    # Handle degenerate polygon
+            #    return cleanChain([]), cleanChain([])
+
             edges = []
             coords = polygon.exterior.coords
+            #plot the crosswalk
+            #import matplotlib.pyplot as plt
+            #plt.plot(*polygon.exterior.xy)
+            #plt.show()
+            
             if len(coords) > 5:
-                for i in range(len(coords) - 2):  # Adjust loop to ensure we have three points
+                for i in range(len(coords) - 2):
                     A, B, C = coords[i], coords[i + 1], coords[i + 2]
                     angle = calculate_angle(A, B, C)
-                    if angle < 10:
+                    if angle < 15:  # Adjust angle threshold as needed
                         edges.append((A, B, C))
             else:
-                edges.append((coords[1], coords[2]))
-                edges.append((coords[3], coords[4]))
-            return edges
-        
-        #find the centers of the shorter edges, which consist of 2 points
+                return cleanChain([coords[0], coords[1]]), cleanChain([coords[2], coords[3]])
+
+            # Find the two longest edges
+            if len(edges) >= 2:
+                edges.sort(key=lambda x: calculate_edge_length(x[0], x[1]))
+                longest_edges = edges[-2:]
+                return cleanChain(longest_edges[0][0:2]), cleanChain(longest_edges[1][0:2])
+            
+            return cleanChain([coords[0], coords[1]]), cleanChain([coords[2], coords[3]])
+
         def find_centerline(polygon):
+            """
+            Finds the centerline of a crosswalk by connecting the centers of the shorter sides.
+
+            Args:
+                polygon: A Shapely Polygon object.
+
+            Returns:
+                A LineString object representing the centerline.
+            """
+
             edges = []
             coords = polygon.exterior.coords
             for i in range(len(coords) - 1):
                 A, B = coords[i], coords[i + 1]
-                distance = np.sqrt((B[0] - A[0])**2 + (B[1] - A[1])**2)
+                distance = calculate_edge_length(A, B)
                 edges.append((A, B, distance))
-            #find the two shortest edges
+
+            # Find the two shortest edges
             edges.sort(key=lambda x: x[2])
             shorter_edges = edges[:2]
-            #find the centers of the shorter edges
+
+            # Find the centers of the shorter edges
             centers = []
             for edge in shorter_edges:
                 center = ((edge[0][0] + edge[1][0]) / 2, (edge[0][1] + edge[1][1]) / 2)
                 centers.append(center)
-            return centers                 
+
+            return cleanChain(centers)
+
+        def calculate_angle(A, B, C):
+            """
+            Calculates the angle ABC (in degrees) given three points A, B, and C.
+
+            Args:
+                A, B, C: Three points as tuples.
+
+            Returns:
+                The angle ABC in degrees.
+            """
+
+            AB = np.array(B) - np.array(A)
+            BC = np.array(C) - np.array(B)
+            cosine_angle = np.dot(AB, BC) / (np.linalg.norm(AB) * np.linalg.norm(BC))
+            angle = np.arccos(np.clip(cosine_angle, -1, 1))
+            return np.degrees(angle)
+
+        def calculate_edge_length(A, B):
+            """
+            Calculates the length of an edge between two points.
+
+            Args:
+                A, B: Two points as tuples.
+
+            Returns:
+                The length of the edge.
+            """
+
+            return np.sqrt((B[0] - A[0])**2 + (B[1] - A[1])**2)
+
+        crosswalk_polygon, centerline, left_edge, right_edge = parse_crosswalk_geometry(global_coords)
         
-        leftEdge, rightEdge = find_longer_edges(crosswalk_region)
-        centerline = find_centerline(crosswalk_region)
-                    
-        ##### Plotting crosswalk region with numbered points for debug #####
-        """
-        import matplotlib.pyplot as plt
-
-        plt.figure(figsize=(10, 7))  # Optional: Adjust figure size
-        plt.plot(*crosswalk_region.exterior.xy, marker='o')  # Plot polygon
-        #plot the left and right edges
-        plt.plot(*zip(*leftEdge), color='red')
-        plt.plot(*zip(*rightEdge), color='purple')
-        plt.plot(*zip(*centerline), color='pink')
-        
-        # Highlight and number each building point
-        for idx, (x, y, z) in enumerate(points):
-            plt.scatter(x, y, color='red')  # Highlight point
-            plt.text(x, y, f' {idx+1}', color='blue', fontsize=12)  # Number point
-
-
-        plt.xlabel('U Coordinate')
-        plt.ylabel('V Coordinate')
-        plt.title('Crosswalk Region with Numbered Points')
-        plt.grid(True)  # Optional: Show grid
-        plt.axis('equal')  # Optional: Ensure aspect ratio is equal
-        plt.show()
-        """
         return Crosswalk(
             crosswalk_elem.get("id"),
             crosswalk_elem.get("name"),
-            crosswalk_region,
-            PolylineRegion(cleanChain(centerline)),
-            PolylineRegion(cleanChain(leftEdge)),
-            PolylineRegion(cleanChain(rightEdge)),
-            s,
-            t,
-            crosswalk_elem.get("zOffset"),
-            crosswalk_elem.get("hdg"),
-            crosswalk_elem.get("roll"),
-            crosswalk_elem.get("pitch"),
-            crosswalk_elem.get("orientation"),
-            crosswalk_elem.get("width"),
-            crosswalk_elem.get("length"),
+            crosswalk_polygon,
+            PolylineRegion(centerline),
+            PolylineRegion(left_edge),
+            PolylineRegion(right_edge),
         )
 
     def __parse_signal_reference(self, signal_reference_elem):
@@ -1732,13 +1879,14 @@ class RoadMap:
                         road.signals.append(signal)
                         
             # added code for parsing the crosswalks
-            crosswalks = r.find("objects")
-            if crosswalks is not None: 
-                for crosswalk_elem in crosswalks.iter("object"):
+            objs = r.find("objects")
+            if objs is not None: 
+                for crosswalk_elem in objs.iter("object"):
                     if crosswalk_elem.get("type") == "crosswalk":
-                        crosswalk = self.__parse_crosswalk(crosswalk_elem)
+                        crosswalk = self.__parse_crosswalk(crosswalk_elem, road.ref_line)
                         road.crossings.append(crosswalk)
-            #print ("road:", road.id_, "crosswalks:", numvber, road.crossings)
+                        
+            print ("road:", road.id_, "crosswalks:", len(road.crossings))
 
             if len(road.lane_secs) > 1:
                 popLastSectionIfShort(road.length - s)
@@ -2017,7 +2165,7 @@ class RoadMap:
                 groups.append(road.backwardLanes)
         lanes = [lane for road in allRoads for lane in road.lanes]
         intersections = tuple(intersections.values())
-        crossings = ()  # TODO add these
+        crossings = [crossing for road in allRoads for crossing in road.crossings]
         sidewalks, shoulders = [], []
         for group in groups:
             sidewalk = group._sidewalk
