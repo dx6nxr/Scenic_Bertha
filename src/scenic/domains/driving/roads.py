@@ -421,7 +421,7 @@ class Road(LinearElement):
     signals: Tuple[Signal]
 
     #: All crosswalks of this road, ordered from start to end.
-    crossings: Tuple[PedestrianCrossing] = ()
+    crossings: Tuple[PedestrianCrossing]
     
     rightDrivingEdge: PolylineRegion
     leftDrivingEdge: PolylineRegion
@@ -737,7 +737,7 @@ class PedestrianCrossing(_ContainsCenterline, LinearElement):
     A pedestrian crossing (crosswalk).
     """
 
-    parent: Union[Road, Intersection]
+    road: Road = None
     startSidewalk: Sidewalk
     endSidewalk: Sidewalk
 
@@ -1328,6 +1328,7 @@ class Network:
         for crossing in self.crossings:
             # add the crossing id to the plot
             crossing.show(plt, style="-", color="#00FF00")
+            crossing.centerline.show(plt, style=":", color="#FFFF00")
             # also add the crossing id to the plot
             x, y, _ = crossing.centerline[-1]
             plt.text(x, y, crossing.uid, fontsize=8, color="#00FF00")

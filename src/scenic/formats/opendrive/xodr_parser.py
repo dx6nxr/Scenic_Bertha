@@ -28,6 +28,8 @@ from scenic.core.regions import PolygonalRegion, PolylineRegion
 from scenic.core.vectors import Vector
 from scenic.domains.driving import roads as roadDomain
 
+from scenic.core.distributions import RejectionException
+
 
 class OpenDriveWarning(UserWarning):
     pass
@@ -259,7 +261,7 @@ class Clothoid(Curve):
                 radius_at_s = 1 / curvature_at_s
                 angle_at_s = s / radius_at_s
                 hdg = self.hdg + angle_at_s
-                print ("heading of the curve", self.hdg, f"heading at {s}", hdg)
+                #print ("heading of the curve", self.hdg, f"heading at {s}", hdg)
                 return hdg
         # Handle general clothoid case
         sol = solve_ivp(self.clothoid_ode, (0, s), self.ode_init)
@@ -1148,19 +1150,7 @@ class Road:
                 type=signal_.type_,
             )
             roadSignals.append(signal)
-        crossings = []
-        for crossing_ in self.crossings:
-            crossing = roadDomain.PedestrianCrossing(
-                id = crossing_.id_,
-                polygon = crossing_.polygon,
-                centerline = crossing_.centerline,
-                leftEdge = crossing_.leftEdge,
-                rightEdge = crossing_.rightEdge,
-                parent = None,
-                startSidewalk = None,
-                endSidewalk = None,
-            )
-            crossings.append(crossing)
+            
         # Create road
         assert forwardGroup or backwardGroup
         if forwardGroup:
@@ -1176,6 +1166,7 @@ class Road:
             leftEdge = forwardGroup.leftEdge
             leftDrivingEdge = forwardGroup.leftDrivingEdge
         centerline = PolylineRegion(tuple(pt[:2] for pt in self.ref_line_points))
+        
         road = roadDomain.Road(
             name=self.name,
             uid=f"road{self.id_}",  # need prefix to prevent collisions with intersections
@@ -1191,10 +1182,10 @@ class Road:
             backwardLanes=backwardGroup,
             sections=roadSections,
             signals=tuple(roadSignals),
-            crossings=crossings,  # TODO add these!
+            crossings=tuple(self.crossings),
         )
         allElements.append(road)
-
+                
         # Set up parent references
         if forwardGroup:
             forwardGroup.road = road
@@ -1243,16 +1234,6 @@ class Signal:
 
     def is_valid(self):
         return self.validity is None or self.validity != [0, 0]
-
-class Crosswalk:
-    """Pedestrian crosswalks."""
-    def __init__(self, id_, name, polygon, centerline, leftEdge, rightEdge):
-        self.id_ = id_
-        self.name = name
-        self.polygon = polygon
-        self.centerline = centerline
-        self.leftEdge = leftEdge
-        self.rightEdge = rightEdge
 
 class SignalReference:
     def __init__(self, id_, orientation, validity=None):
@@ -1496,7 +1477,6 @@ class RoadMap:
         t0 = float(crosswalk_elem.get("t"))
         orient = crosswalk_elem.get("orientation")
         width = float(crosswalk_elem.get("width"))
-        elemhdg = float(crosswalk_elem.get("hdg"))  # Heading angle is already in radians
 
         # Find the appropriate reference point based on the crosswalk's "s" coordinate
         for curve in reference_points:
@@ -1514,7 +1494,7 @@ class RoadMap:
         else:
             hdg = _curve.hdg_at(s0 - width / 2)
             
-        print (f"Crosswalk {crosswalk_elem.get('id')} hdg", hdg, "elem heading", elemhdg, "hdg + elemhdg", elemhdg - hdg)
+        #print (f"Crosswalk {crosswalk_elem.get('id')} hdg", hdg, "elem heading", elemhdg, "hdg + elemhdg", elemhdg - hdg)
 
         for point in crosswalk_elem.find("outline").findall("cornerLocal"):
             u, v, _ = float(point.get("u")), float(point.get("v")), 0
@@ -1656,14 +1636,19 @@ class RoadMap:
             return np.sqrt((B[0] - A[0])**2 + (B[1] - A[1])**2)
 
         crosswalk_polygon, centerline, left_edge, right_edge = parse_crosswalk_geometry(global_coords)
+        #print (f"Crosswalk {crosswalk_elem.get('id')} parent {parent.id_}")
         
-        return Crosswalk(
-            crosswalk_elem.get("id"),
-            crosswalk_elem.get("name"),
-            crosswalk_polygon,
-            PolylineRegion(centerline),
-            PolylineRegion(left_edge),
-            PolylineRegion(right_edge),
+        return roadDomain.PedestrianCrossing(
+            id=crosswalk_elem.get("id"),
+            uid=("Crosswalk" + crosswalk_elem.get("id")),
+            name=crosswalk_elem.get("name"),
+            polygon=crosswalk_polygon,
+            centerline=PolylineRegion(centerline),
+            leftEdge=PolylineRegion(left_edge),
+            rightEdge=PolylineRegion(right_edge),
+            road=None,
+            startSidewalk=None,
+            endSidewalk=None,
         )
 
     def __parse_signal_reference(self, signal_reference_elem):
@@ -1929,8 +1914,6 @@ class RoadMap:
                     if crosswalk_elem.get("type") == "crosswalk":
                         crosswalk = self.__parse_crosswalk(crosswalk_elem, road.ref_line)
                         road.crossings.append(crosswalk)
-                        
-            print ("road:", road.id_, "crosswalks:", len(road.crossings))
 
             if len(road.lane_secs) > 1:
                 popLastSectionIfShort(road.length - s)
@@ -2037,6 +2020,7 @@ class RoadMap:
             # Gather all lanes involved in the junction's connections
             allIncomingLanes, allOutgoingLanes = [], []
             allRoads, seenRoads = [], set()
+            allCrossings, seenCrossings = [], set()
             allSignals, seenSignals = [], set()
             maneuversForLane = defaultdict(list)
             for connection in junction.connections:
@@ -2054,6 +2038,10 @@ class RoadMap:
                     if signal.openDriveID not in seenSignals:
                         allSignals.append(signal)
                         seenSignals.add(signal.openDriveID)
+                for crossing in connectingRoad.crossings:
+                    if crossing.id not in seenCrossings:
+                        allCrossings.append(crossing)
+                        seenCrossings.add(crossing.id)
 
                 # Find possible incoming lanes for this connection
                 if incomingID not in seenRoads:
@@ -2079,6 +2067,13 @@ class RoadMap:
                             incomingLaneIDs[start] = newIDs[remapped]
                     assert len(incomingLaneIDs) == len(newIDs)
 
+                
+                for road in allRoads:
+                    for crossing in road.crossings:
+                        if crossing.id not in seenCrossings:
+                            allCrossings.append(crossing)
+                            seenCrossings.add(crossing.id)
+                
                 # Connect incoming lanes to connecting road
                 if connection.connecting_contact == "start":
                     connectingSection = connectingRoad.sections[0]
@@ -2136,6 +2131,33 @@ class RoadMap:
                             endLane=outgoingLane,
                             intersection=None,  # will be patched once the Intersection is created
                         )
+                        
+                        if maneuver.connectingLane.road.crossings:
+                            # check the distance between the crossing an the start/end lane
+                            # assign the crossing to the nearest lane road
+                            connectingRoad = maneuver.connectingLane.road
+                            for crossing in connectingRoad.crossings:
+                                startDistance = crossing.polygon.distance(maneuver.startLane.polygon)
+                                endDistance = crossing.polygon.distance(maneuver.endLane.polygon)
+                                if startDistance < endDistance:
+                                    # append the crossing to the start lane
+                                    crossings = list(maneuver.startLane.road.crossings)
+                                    crossings.append(crossing)
+                                    maneuver.startLane.road.crossings = tuple(crossings)
+                                    # remove the crossing from the connecting road
+                                    crossings = list(connectingRoad.crossings)
+                                    crossings.remove(crossing)
+                                    object.__setattr__(connectingRoad, "crossings", tuple(crossings))
+                                else:
+                                    # append the crossing to the end lane
+                                    crossings = list(maneuver.endLane.road.crossings)
+                                    crossings.append(crossing)
+                                    maneuver.endLane.road.crossings = tuple(crossings)
+                                    #remove the crossing from the connecting road
+                                    crossings = list(connectingRoad.crossings)
+                                    crossings.remove(crossing)
+                                    object.__setattr__(connectingRoad, "crossings", tuple(crossings))
+                        
                         maneuversForLane[fromLane.lane].append(maneuver)
 
             # Gather maneuvers
@@ -2172,7 +2194,7 @@ class RoadMap:
                 outgoingLanes=cyclicOrder(allOutgoingLanes, contactStart=True),
                 maneuvers=tuple(allManeuvers),
                 signals=tuple(allSignals),
-                crossings=[road.crossings for road in allRoads],  # TODO add these
+                crossings=tuple(allCrossings),  # TODO add these
             )
             register(intersection)
             intersections[jid] = intersection
@@ -2199,6 +2221,16 @@ class RoadMap:
 
         # Gather all network elements
         roads = tuple(mainRoads.values())
+        for road in roads:
+            for crossing in road.crossings:
+                crossing.road = road
+                if road.forwardLanes:
+                    if road.forwardLanes._sidewalk:
+                        object.__setattr__(crossing, "startSidewalk", road.forwardLanes._sidewalk)
+                if road.backwardLanes:
+                    if road.backwardLanes._sidewalk:
+                        object.__setattr__(crossing, "endSidewalk", road.backwardLanes._sidewalk)
+                    
         connectingRoads = tuple(connectingRoads.values())
         allRoads = roads + connectingRoads
         groups = []
@@ -2229,6 +2261,9 @@ class RoadMap:
                 )
                 lane.maneuvers = (maneuver,)
 
+        for crossing in crossings:
+            register(crossing)
+        
         def combine(regions):
             return PolygonalRegion.unionAll(regions, buf=self.tolerance)
 
@@ -2239,7 +2274,7 @@ class RoadMap:
             laneGroups=tuple(groups),
             lanes=lanes,
             intersections=intersections,
-            crossings=crossings,
+            crossings=tuple(crossings),
             sidewalks=tuple(sidewalks),
             shoulders=tuple(shoulders),
             tolerance=self.tolerance,
