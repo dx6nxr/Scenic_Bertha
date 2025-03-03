@@ -47,8 +47,8 @@ class HUD(object):
     def __init__(self, width, height):
         self.dim = (width, height)
         font = pygame.font.Font(pygame.font.get_default_font(), 20)
-        fonts = [x for x in pygame.font.get_fonts() if "mono" in x]
-        default_font = "ubuntumono"
+        fonts = [x for x in pygame.font.get_fonts()]
+        default_font = "arial"
         mono = default_font if default_font in fonts else fonts[0]
         mono = pygame.font.match_font(mono)
         self._font_mono = pygame.font.Font(mono, 14)
@@ -99,7 +99,8 @@ class HUD(object):
             "",
             "Speed:   % 15.0f m/s" % math.sqrt(v.x**2 + v.y**2 + v.z**2),
             "Heading:% 16.0f\N{DEGREE SIGN} % 2s" % (t.rotation.yaw, heading),
-            "Location:% 20s" % ("(% 5.3f, % 5.3f)" % (t.location.x, t.location.y)),
+            "Location:% 20s" % ("(% 5.3f, % 5.3f)" %
+                                (t.location.x, t.location.y)),
             "Height:  % 18.0f m" % t.location.z,
         ]
 
@@ -113,8 +114,8 @@ class HUD(object):
                 ("Hand brake:", c.hand_brake),
                 ("Manual:", c.manual_gear_shift),
                 "Gear:      %s" % {-1: "R", 0: "N"}.get(c.gear, c.gear),
-                #'',
-                #'Collision:', collision,
+                # '',
+                # 'Collision:', collision,
             ]
         except:
             _control_text = []
@@ -123,7 +124,8 @@ class HUD(object):
 
         if len(vehicles) > 1:
             self._info_text += ["Nearby vehicles:"]
-            distance = lambda l: math.sqrt(
+
+            def distance(l): return math.sqrt(
                 (l.x - t.location.x) ** 2
                 + (l.y - t.location.y) ** 2
                 + (l.z - t.location.z) ** 2
@@ -160,7 +162,8 @@ class HUD(object):
             elif isinstance(item, tuple):
                 if isinstance(item[1], bool):
                     rect = pygame.Rect((bar_h_offset, v_offset + 8), (6, 6))
-                    pygame.draw.rect(display, (255, 255, 255), rect, 0 if item[1] else 1)
+                    pygame.draw.rect(display, (255, 255, 255),
+                                     rect, 0 if item[1] else 1)
                 else:
                     rect_border = pygame.Rect(
                         (bar_h_offset, v_offset + 8), (bar_width, 6)
@@ -231,7 +234,8 @@ class CollisionSensor(object):
         )
         # Pass the lambda a weak reference to self to avoid circular reference
         weak_self = weakref.ref(self)
-        self.sensor.listen(lambda event: CollisionSensor._on_collision(weak_self, event))
+        self.sensor.listen(
+            lambda event: CollisionSensor._on_collision(weak_self, event))
 
     def get_collision_speeds(self):
         """Convert collision intensities from momentem (kg*m/s) to speed (m/s)."""
@@ -251,7 +255,8 @@ class CollisionSensor(object):
         actor_type = get_actor_display_name(event.other_actor)
         if self._hud:
             self._hud.notification(
-                "Collision with %r, id = %d" % (actor_type, event.other_actor.id)
+                "Collision with %r, id = %d" % (
+                    actor_type, event.other_actor.id)
             )
         impulse = event.normal_impulse
         intensity = math.sqrt(impulse.x**2 + impulse.y**2 + impulse.z**2)
@@ -273,7 +278,8 @@ class CameraManager(object):
         self._hud = hud
         self.images = []
         self._camera_transforms = [
-            carla.Transform(carla.Location(x=-5.5, z=2.8), carla.Rotation(pitch=-15)),
+            carla.Transform(carla.Location(x=-5.5, z=2.8),
+                            carla.Rotation(pitch=-15)),
             carla.Transform(carla.Location(x=1.6, z=1.7)),
         ]
         self._transform_index = 1
@@ -309,11 +315,13 @@ class CameraManager(object):
         self._index = None
 
     def toggle_camera(self):
-        set_transform((self._transform_index + 1) % len(self._camera_transforms))
+        set_transform((self._transform_index + 1) %
+                      len(self._camera_transforms))
 
     def set_transform(self, idx):
         self._transform_index = idx
-        self.sensor.set_transform(self._camera_transforms[self._transform_index])
+        self.sensor.set_transform(
+            self._camera_transforms[self._transform_index])
 
     def set_sensor(self, index):
         index = index % len(self._sensors)
@@ -333,7 +341,8 @@ class CameraManager(object):
             )
             # Pass lambda a weak reference to self to avoid circular reference
             weak_self = weakref.ref(self)
-            self.sensor.listen(lambda image: CameraManager._parse_image(weak_self, image))
+            self.sensor.listen(
+                lambda image: CameraManager._parse_image(weak_self, image))
         self._index = index
 
     def render(self, display):
