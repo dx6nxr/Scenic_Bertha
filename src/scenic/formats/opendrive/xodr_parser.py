@@ -95,7 +95,7 @@ class Curve:
     def point_at(self, s):
         """Get an (x, y, s) point along the curve at the given s coordinate."""
         return
-    
+
     @abc.abstractmethod
     def hdg_at(self, s):
         """Get the heading at the given s coordinate."""
@@ -122,7 +122,8 @@ class Cubic(Curve):
         # Crude upper bound for u (used to bracket u for a given s in point_at)
         if d != 0:
             self.ubound = max(
-                2 * abs(c / d), abs(b / d) ** 0.5, (3 * length / abs(d)) ** (1 / 3)
+                2 * abs(c / d), abs(b / d) ** 0.5, (3 *
+                                                    length / abs(d)) ** (1 / 3)
             )
         elif c != 0:
             self.ubound = max(abs(b / c), (2 * length / abs(c)) ** 0.5)
@@ -130,14 +131,14 @@ class Cubic(Curve):
             self.ubound = length / abs(b)
 
     def arclength(self, u):
-        d_arc = lambda x: np.sqrt(1 + self.poly.grad_at(x) ** 2)
+        def d_arc(x): return np.sqrt(1 + self.poly.grad_at(x) ** 2)
         return quad(d_arc, 0, u)[0]
 
     def point_at(self, s):
         # Use Brent's method to find parameter u corresponding to arclength s;
         # (N.B. Brent's method proved to be faster than Newton's and has no potential
         # convergence issues.)
-        root_func = lambda x: self.arclength(x) - s
+        def root_func(x): return self.arclength(x) - s
         u = float(brentq(root_func, 0, self.ubound))
         pt = (s, self.poly.eval_at(u), s)
         return self.rel_to_abs(pt)
@@ -174,11 +175,12 @@ class ParamCubic(Curve):
         self.p_range = p_range if p_range else 1
 
     def arclength(self, p):
-        d_arc = lambda x: math.hypot(self.u_poly.grad_at(x), self.v_poly.grad_at(x))
+        def d_arc(x): return math.hypot(
+            self.u_poly.grad_at(x), self.v_poly.grad_at(x))
         return quad(d_arc, 0, p)[0]
 
     def point_at(self, s):
-        root_func = lambda x: self.arclength(x) - s
+        def root_func(x): return self.arclength(x) - s
         p = float(brentq(root_func, 0, self.p_range))
         pt = (self.u_poly.eval_at(p), self.v_poly.eval_at(p), s)
         return self.rel_to_abs(pt)
@@ -199,6 +201,7 @@ class ParamCubic(Curve):
         dv_dp = self.v_poly.grad_at(p)
         heading = np.arctan2(dv_dp, du_dp)
         return heading
+
 
 class Clothoid(Curve):
     """An Euler spiral with curvature varying linearly between CURV0 and CURV1.
@@ -234,13 +237,14 @@ class Clothoid(Curve):
             def clothoid_ode(s, state):
                 x, y, theta = state
                 return np.array(
-                    [math.cos(theta), math.sin(theta), self.curv0 + (self.curve_rate * s)]
+                    [math.cos(theta), math.sin(theta),
+                     self.curv0 + (self.curve_rate * s)]
                 )
 
             sol = solve_ivp(clothoid_ode, (0, s), self.ode_init)
             x, y, hdg = sol.y[:, -1]
             return (x, y, s)
-        
+
     def hdg_at(self, s):
         """
         Calculates the heading at a specific point along the clothoid curve.
@@ -251,23 +255,23 @@ class Clothoid(Curve):
         Returns:
             The heading at the specified point.
         """
-        
+
         if self.curv0 == self.curv1:
             if self.curv0 == 0:
                 return self.hdg
             else:
-                #this case causes shit to happen
-                curvature_at_s = self.curv0 + (self.curv1 - self.curv0) * s / self.length
+                # this case causes shit to happen
+                curvature_at_s = self.curv0 + \
+                    (self.curv1 - self.curv0) * s / self.length
                 radius_at_s = 1 / curvature_at_s
                 angle_at_s = s / radius_at_s
                 hdg = self.hdg + angle_at_s
-                #print ("heading of the curve", self.hdg, f"heading at {s}", hdg)
+                # print ("heading of the curve", self.hdg, f"heading at {s}", hdg)
                 return hdg
         # Handle general clothoid case
         sol = solve_ivp(self.clothoid_ode, (0, s), self.ode_init)
         _, _, hdg = sol.y[:, -1]
         return hdg
-
 
 
 class Line(Curve):
@@ -281,7 +285,7 @@ class Line(Curve):
 
     def point_at(self, s):
         return self.rel_to_abs((s, 0, s))
-    
+
     def hdg_at(self, s):
         return self.hdg
 
@@ -345,14 +349,16 @@ class LaneSection:
                     lane_id
                 ].width_at(s - self.s0)
             else:
-                offsets[lane_id] = self.left_lanes[lane_id].width_at(s - self.s0)
+                offsets[lane_id] = self.left_lanes[lane_id].width_at(
+                    s - self.s0)
         for lane_id in self.right_lane_ids:
             if lane_id + 1 in self.right_lane_ids:
                 offsets[lane_id] = offsets[lane_id + 1] - self.right_lanes[
                     lane_id
                 ].width_at(s - self.s0)
             else:
-                offsets[lane_id] = -self.right_lanes[lane_id].width_at(s - self.s0)
+                offsets[lane_id] = - \
+                    self.right_lanes[lane_id].width_at(s - self.s0)
         return offsets
 
 
@@ -407,7 +413,8 @@ class Road:
         self.lane_secs = []  # List of LaneSection objects.
         self.ref_line = []  # List of Curve objects defining reference line.
         # NOTE: sec_points, sec_polys, sec_lane_polys should be ordered according to lane_secs.
-        self.sec_points = []  # List of lists of points, one for each LaneSection.
+        # List of lists of points, one for each LaneSection.
+        self.sec_points = []
         self.sec_polys = []  # List of Polygons, one for each LaneSections.
         # List of dict of lane id to Polygon for each LaneSection.
         self.sec_lane_polys = []
@@ -449,9 +456,11 @@ class Road:
             assert piece_points, "Failed to get piece points"
             if ref_points:
                 last_s = ref_points[-1][-1][2]
-                piece_points = [(p[0], p[1], p[2] + last_s) for p in piece_points]
+                piece_points = [(p[0], p[1], p[2] + last_s)
+                                for p in piece_points]
             ref_points.append(piece_points)
-            transition_points = [s - last_s for s in transition_points if s > last_s]
+            transition_points = [
+                s - last_s for s in transition_points if s > last_s]
         return ref_points
 
     def heading_at(self, point):
@@ -474,8 +483,10 @@ class Road:
                         closest_idx = i
                 if closest_idx >= len(ref_points) - 1:
                     closest_idx = len(ref_points) - 2
-                dy = ref_points[closest_idx + 1][1] - ref_points[closest_idx][1]
-                dx = ref_points[closest_idx + 1][0] - ref_points[closest_idx][0]
+                dy = ref_points[closest_idx + 1][1] - \
+                    ref_points[closest_idx][1]
+                dx = ref_points[closest_idx + 1][0] - \
+                    ref_points[closest_idx][0]
                 heading = math.atan2(dy, dx)
                 # Right lanes have negative lane_id.
                 # Flip heading if drive_on_right XOR right lane.
@@ -591,7 +602,8 @@ class Road:
                         tan_vec = (cur_p[0] - prev_p[0], cur_p[1] - prev_p[1])
                     tan_norm = math.hypot(tan_vec[0], tan_vec[1])
                     assert tan_norm > 1e-10
-                    normal_vec = (-tan_vec[1] / tan_norm, tan_vec[0] / tan_norm)
+                    normal_vec = (-tan_vec[1] / tan_norm,
+                                  tan_vec[0] / tan_norm)
                     if cur_p[2] < s_stop:
                         # if at end of section, keep current point to be included in
                         # the next section as well; otherwise remove it
@@ -643,7 +655,8 @@ class Road:
             sec_points.append(cur_sec_points)
             sec_polys.append(buffer_union(cur_sec_polys, tolerance=tolerance))
             for id_ in cur_sec_lane_polys:
-                poly = buffer_union(cur_sec_lane_polys[id_], tolerance=tolerance)
+                poly = buffer_union(
+                    cur_sec_lane_polys[id_], tolerance=tolerance)
                 cur_sec_lane_polys[id_] = poly
                 cur_sec.get_lane(id_).poly = poly
             sec_lane_polys.append(dict(cur_sec_lane_polys))
@@ -658,7 +671,8 @@ class Road:
                     next_lane_polys[id_] = [cur_sec_lane_polys[id_]]
             for id_ in cur_lane_polys:
                 poly = buffer_union(cur_lane_polys[id_], tolerance=tolerance)
-                self.lane_secs[i - 1].get_lane(id_).parent_lane_poly = len(lane_polys)
+                self.lane_secs[i -
+                               1].get_lane(id_).parent_lane_poly = len(lane_polys)
                 lane_polys.append(poly)
             cur_lane_polys = next_lane_polys
         for id_ in cur_lane_polys:
@@ -673,7 +687,8 @@ class Road:
         # Difference and slightly erode all overlapping polygons
         for i in range(len(sec_polys) - 1):
             if sec_polys[i].overlaps(sec_polys[i + 1]):
-                sec_polys[i] = sec_polys[i].difference(sec_polys[i + 1]).buffer(-1e-6)
+                sec_polys[i] = sec_polys[i].difference(
+                    sec_polys[i + 1]).buffer(-1e-6)
                 assert not sec_polys[i].overlaps(sec_polys[i + 1])
 
         for polys in sec_lane_polys:
@@ -686,7 +701,8 @@ class Road:
 
         for i in range(len(lane_polys) - 1):
             if lane_polys[i].overlaps(lane_polys[i + 1]):
-                lane_polys[i] = lane_polys[i].difference(lane_polys[i + 1]).buffer(-1e-6)
+                lane_polys[i] = lane_polys[i].difference(
+                    lane_polys[i + 1]).buffer(-1e-6)
                 assert not lane_polys[i].overlaps(lane_polys[i + 1])
 
         # Set parent lane polygon references to corrected polygons
@@ -792,7 +808,8 @@ class Road:
                     pred = lane.pred  # will correct inter-road links later
                 left, center, right, rightEdge, leftEdge = lane.left_bounds, lane.centerline, lane.right_bounds, lane.rightDrivingEdge, lane.leftDrivingEdge
                 if id_ > 0:  # backward lane
-                    left, center, right, rightEdge, leftEdge = right[::-1], center[::-1], left[::-1], rightEdge[::-1], leftEdge[::-1]
+                    left, center, right, rightEdge, leftEdge = right[::-
+                                                                     1], center[::-1], left[::-1], rightEdge[::-1], leftEdge[::-1]
                     succ, pred = pred, succ
                 section = roadDomain.LaneSection(
                     id=f"road{self.id_}_sec{len(roadSections)}_lane{id_}",
@@ -819,8 +836,10 @@ class Road:
                 centerline=PolylineRegion(cleanChain(pts)),
                 leftEdge=PolylineRegion(cleanChain(sec.left_edge)),
                 rightEdge=PolylineRegion(cleanChain(sec.right_edge)),
-                rightDrivingEdge=PolylineRegion(cleanChain(sec.right_driving_edge)),
-                leftDrivingEdge=PolylineRegion(cleanChain(sec.left_driving_edge)),
+                rightDrivingEdge=PolylineRegion(
+                    cleanChain(sec.right_driving_edge)),
+                leftDrivingEdge=PolylineRegion(
+                    cleanChain(sec.left_driving_edge)),
                 successor=None,
                 predecessor=last_section,
                 road=None,  # will set later
@@ -880,7 +899,8 @@ class Road:
                 for d in np.linspace(0, 1, num):
                     l = leftEdge.lineString.interpolate(d, normalized=True)
                     r = rightEdge.lineString.interpolate(d, normalized=True)
-                    centerPoints.append(averageVectors(l.coords[0], r.coords[0]))
+                    centerPoints.append(
+                        averageVectors(l.coords[0], r.coords[0]))
             centerline = PolylineRegion(cleanChain(centerPoints))
             allPolys = (
                 sec.poly
@@ -949,9 +969,11 @@ class Road:
             for id_, lane in sec.drivable_lanes.items():
                 newLane = section.lanesByOpenDriveID[id_]
                 if newLane.isForward:
-                    newLane._successor = next_section.lanesByOpenDriveID.get(lane.succ)
+                    newLane._successor = next_section.lanesByOpenDriveID.get(
+                        lane.succ)
                 else:
-                    newLane._predecessor = next_section.lanesByOpenDriveID.get(lane.succ)
+                    newLane._predecessor = next_section.lanesByOpenDriveID.get(
+                        lane.succ)
             next_section = section
 
         # Connect lane sections to adjacent lane sections
@@ -1024,14 +1046,17 @@ class Road:
                         leftPoints.extend(section.leftEdge.points)
                         rightPoints.extend(section.rightEdge.points)
                         centerPoints.extend(section.centerline.points)
-                        rightDrivingEdge.extend(section.rightDrivingEdge.points)
+                        rightDrivingEdge.extend(
+                            section.rightDrivingEdge.points)
                         leftDrivingEdge.extend(section.leftDrivingEdge.points)
-                        
+
                     leftEdge = PolylineRegion(cleanChain(leftPoints))
                     rightEdge = PolylineRegion(cleanChain(rightPoints))
                     centerline = PolylineRegion(cleanChain(centerPoints))
-                    rightDrivingEdge = PolylineRegion(cleanChain(rightDrivingEdge))
-                    leftDrivingEdge = PolylineRegion(cleanChain(leftDrivingEdge))
+                    rightDrivingEdge = PolylineRegion(
+                        cleanChain(rightDrivingEdge))
+                    leftDrivingEdge = PolylineRegion(
+                        cleanChain(leftDrivingEdge))
                     lane = roadDomain.Lane(
                         id=f"road{self.id_}_lane{nextID}",
                         polygon=ls.parent_lane_poly,
@@ -1041,8 +1066,8 @@ class Road:
                         group=None,
                         road=None,
                         sections=tuple(sections),
-                        rightDrivingEdge = rightDrivingEdge,
-                        leftDrivingEdge = leftDrivingEdge,
+                        rightDrivingEdge=rightDrivingEdge,
+                        leftDrivingEdge=leftDrivingEdge,
                         successor=successorLane,  # will correct inter-road links later
                     )
                     nextID += 1
@@ -1087,12 +1112,15 @@ class Road:
                 rightDrivingEdgePoints.extend(current.rightDrivingEdge.points)
                 current = current._successor
             rightEdge = PolylineRegion(cleanChain(rightPoints))
-            rightDrivingEdge = PolylineRegion(cleanChain(rightDrivingEdgePoints))
-            middleLane = startLanes[len(startLanes) // 2].lane  # rather arbitrary
+            rightDrivingEdge = PolylineRegion(
+                cleanChain(rightDrivingEdgePoints))
+            # rather arbitrary
+            middleLane = startLanes[len(startLanes) // 2].lane
             return leftEdge, middleLane.centerline, rightEdge, rightDrivingEdge, leftDrivingEdge
 
         if forwardLanes:
-            leftEdge, centerline, rightEdge, rightDrivingEdge, leftDrivingEdge = getEdges(forward=True)
+            leftEdge, centerline, rightEdge, rightDrivingEdge, leftDrivingEdge = getEdges(
+                forward=True)
             forwardGroup = roadDomain.LaneGroup(
                 id=f"road{self.id_}_forward",
                 polygon=buffer_union(
@@ -1115,7 +1143,8 @@ class Road:
         else:
             forwardGroup = None
         if backwardLanes:
-            leftEdge, centerline, rightEdge, rightDrivingEdge, leftDrivingEdge = getEdges(forward=False)
+            leftEdge, centerline, rightEdge, rightDrivingEdge, leftDrivingEdge = getEdges(
+                forward=False)
             backwardGroup = roadDomain.LaneGroup(
                 id=f"road{self.id_}_backward",
                 polygon=buffer_union(
@@ -1150,7 +1179,7 @@ class Road:
                 type=signal_.type_,
             )
             roadSignals.append(signal)
-            
+
         # Create road
         assert forwardGroup or backwardGroup
         if forwardGroup:
@@ -1165,11 +1194,13 @@ class Road:
         else:
             leftEdge = forwardGroup.leftEdge
             leftDrivingEdge = forwardGroup.leftDrivingEdge
-        centerline = PolylineRegion(tuple(pt[:2] for pt in self.ref_line_points))
-        
+        centerline = PolylineRegion(
+            tuple(pt[:2] for pt in self.ref_line_points))
+
         road = roadDomain.Road(
             name=self.name,
-            uid=f"road{self.id_}",  # need prefix to prevent collisions with intersections
+            # need prefix to prevent collisions with intersections
+            uid=f"road{self.id_}",
             id=self.id_,
             polygon=self.drivable_region,
             centerline=centerline,
@@ -1185,7 +1216,7 @@ class Road:
             crossings=tuple(self.crossings),
         )
         allElements.append(road)
-                
+
         # Set up parent references
         if forwardGroup:
             forwardGroup.road = road
@@ -1234,6 +1265,7 @@ class Signal:
 
     def is_valid(self):
         return self.validity is None or self.validity != [0, 0]
+
 
 class SignalReference:
     def __init__(self, id_, orientation, validity=None):
@@ -1311,8 +1343,10 @@ class RoadMap:
             for link in self.road_links:
                 road_a = self.roads[link.id_a]
                 road_b = self.roads[link.id_b]
-                assert link.contact_a in ["start", "end"], "Invalid link record."
-                assert link.contact_b in ["start", "end"], "Invalid link record."
+                assert link.contact_a in [
+                    "start", "end"], "Invalid link record."
+                assert link.contact_b in [
+                    "start", "end"], "Invalid link record."
                 if link.contact_a == "start":
                     a_sec = road_a.lane_secs[0]
                     a_bounds_left = road_a.start_bounds_left
@@ -1356,13 +1390,19 @@ class RoadMap:
                         elif lane.type_ in self.shoulder_lane_types:
                             shoulder_polys.append(gap_poly)
         else:
-            drivable_polys = [road.drivable_region for road in self.roads.values()]
-            sidewalk_polys = [road.sidewalk_region for road in self.roads.values()]
-            shoulder_polys = [road.shoulder_region for road in self.roads.values()]
+            drivable_polys = [
+                road.drivable_region for road in self.roads.values()]
+            sidewalk_polys = [
+                road.sidewalk_region for road in self.roads.values()]
+            shoulder_polys = [
+                road.shoulder_region for road in self.roads.values()]
 
-        self.drivable_region = buffer_union(drivable_polys, tolerance=self.tolerance)
-        self.sidewalk_region = buffer_union(sidewalk_polys, tolerance=self.tolerance)
-        self.shoulder_region = buffer_union(shoulder_polys, tolerance=self.tolerance)
+        self.drivable_region = buffer_union(
+            drivable_polys, tolerance=self.tolerance)
+        self.sidewalk_region = buffer_union(
+            sidewalk_polys, tolerance=self.tolerance)
+        self.shoulder_region = buffer_union(
+            shoulder_polys, tolerance=self.tolerance)
 
         if calc_intersect:
             self.calculate_intersections()
@@ -1378,7 +1418,8 @@ class RoadMap:
             assert union.is_valid
             junc.poly = union
             intersect_polys.append(union)
-        self.intersection_region = buffer_union(intersect_polys, tolerance=self.tolerance)
+        self.intersection_region = buffer_union(
+            intersect_polys, tolerance=self.tolerance)
 
     def heading_at(self, point):
         """Return the road heading at point."""
@@ -1430,7 +1471,8 @@ class RoadMap:
             self.road_links.append(link)
             return link
         else:
-            assert link_elem.get("elementType") == "junction", "Unknown link type"
+            assert link_elem.get(
+                "elementType") == "junction", "Unknown link type"
             junction = int(link_elem.get("elementId"))
             if junction not in self.junctions:
                 return  # junction had no connecting roads, so we skipped it
@@ -1442,7 +1484,8 @@ class RoadMap:
             for c in connections:
                 if c.incoming_id == road_id:
                     self.road_links.append(
-                        RoadLink(road_id, c.connecting_id, contact, c.connecting_contact)
+                        RoadLink(road_id, c.connecting_id,
+                                 contact, c.connecting_contact)
                     )
 
     def __parse_signal_validity(self, validity_elem):
@@ -1459,7 +1502,7 @@ class RoadMap:
             signal_elem.get("orientation"),
             self.__parse_signal_validity(signal_elem.find("validity")),
         )
-        
+
     def __parse_crosswalk(self, crosswalk_elem, reference_points):
         """
         Parses a crosswalk element and returns its geometry in global coordinates.
@@ -1472,7 +1515,7 @@ class RoadMap:
             A crosswalk object.
         """
         from math import radians, sin, cos
-        #print("Parsing crosswalk", crosswalk_elem.get("id"))
+        # print("Parsing crosswalk", crosswalk_elem.get("id"))
         s0 = float(crosswalk_elem.get("s"))
         t0 = float(crosswalk_elem.get("t"))
         orient = crosswalk_elem.get("orientation")
@@ -1493,12 +1536,12 @@ class RoadMap:
             hdg = _curve.hdg_at(s0 + width / 2)
         else:
             hdg = _curve.hdg_at(s0 - width / 2)
-            
-        #print (f"Crosswalk {crosswalk_elem.get('id')} hdg", hdg, "elem heading", elemhdg, "hdg + elemhdg", elemhdg - hdg)
+
+        # print (f"Crosswalk {crosswalk_elem.get('id')} hdg", hdg, "elem heading", elemhdg, "hdg + elemhdg", elemhdg - hdg)
 
         for point in crosswalk_elem.find("outline").findall("cornerLocal"):
             u, v, _ = float(point.get("u")), float(point.get("v")), 0
-            
+
             # v and u are swapped because crossings are rotated 90 degrees in relation to the road
             if orient == "+":  # add the element in positive s direction
                 s = s0 + v
@@ -1512,7 +1555,7 @@ class RoadMap:
             x = x + t * sin(hdg)
             y = y + t * cos(hdg)
             global_coords.append((x, y))
-        
+
         def parse_crosswalk_geometry(global_coords):
             """
             Parses the geometry of a crosswalk, finding the centerline, leftEdge, and rightEdge.
@@ -1526,7 +1569,7 @@ class RoadMap:
 
             # Create a Polygon object from the global coordinates
             polygon = Polygon(global_coords)
-            
+
             # Find the two longest edges (left and right edges)
             left_edge, right_edge = find_longer_edges(polygon)
 
@@ -1547,17 +1590,17 @@ class RoadMap:
                 empty LineString objects if no valid edges are found.
             """
 
-            #if polygon.is_empty or polygon.area == 0:
+            # if polygon.is_empty or polygon.area == 0:
             #    # Handle degenerate polygon
             #    return cleanChain([]), cleanChain([])
 
             edges = []
             coords = polygon.exterior.coords
-            #plot the crosswalk
-            #import matplotlib.pyplot as plt
-            #plt.plot(*polygon.exterior.xy)
-            #plt.show()
-            
+            # plot the crosswalk
+            # import matplotlib.pyplot as plt
+            # plt.plot(*polygon.exterior.xy)
+            # plt.show()
+
             if len(coords) > 5:
                 for i in range(len(coords) - 2):
                     A, B, C = coords[i], coords[i + 1], coords[i + 2]
@@ -1572,7 +1615,7 @@ class RoadMap:
                 edges.sort(key=lambda x: calculate_edge_length(x[0], x[1]))
                 longest_edges = edges[-2:]
                 return cleanChain(longest_edges[0][0:2]), cleanChain(longest_edges[1][0:2])
-            
+
             return cleanChain([coords[0], coords[1]]), cleanChain([coords[2], coords[3]])
 
         def find_centerline(polygon):
@@ -1600,7 +1643,8 @@ class RoadMap:
             # Find the centers of the shorter edges
             centers = []
             for edge in shorter_edges:
-                center = ((edge[0][0] + edge[1][0]) / 2, (edge[0][1] + edge[1][1]) / 2)
+                center = ((edge[0][0] + edge[1][0]) / 2,
+                          (edge[0][1] + edge[1][1]) / 2)
                 centers.append(center)
 
             return cleanChain(centers)
@@ -1618,7 +1662,8 @@ class RoadMap:
 
             AB = np.array(B) - np.array(A)
             BC = np.array(C) - np.array(B)
-            cosine_angle = np.dot(AB, BC) / (np.linalg.norm(AB) * np.linalg.norm(BC))
+            cosine_angle = np.dot(AB, BC) / \
+                (np.linalg.norm(AB) * np.linalg.norm(BC))
             angle = np.arccos(np.clip(cosine_angle, -1, 1))
             return np.degrees(angle)
 
@@ -1635,9 +1680,10 @@ class RoadMap:
 
             return np.sqrt((B[0] - A[0])**2 + (B[1] - A[1])**2)
 
-        crosswalk_polygon, centerline, left_edge, right_edge = parse_crosswalk_geometry(global_coords)
-        #print (f"Crosswalk {crosswalk_elem.get('id')} parent {parent.id_}")
-        
+        crosswalk_polygon, centerline, left_edge, right_edge = parse_crosswalk_geometry(
+            global_coords)
+        # print (f"Crosswalk {crosswalk_elem.get('id')} parent {parent.id_}")
+
         return roadDomain.PedestrianCrossing(
             id=crosswalk_elem.get("id"),
             uid=("Crosswalk" + crosswalk_elem.get("id")),
@@ -1655,7 +1701,8 @@ class RoadMap:
         return SignalReference(
             signal_reference_elem.get("id"),
             signal_reference_elem.get("orientation"),
-            self.__parse_signal_validity(signal_reference_elem.find("validity")),
+            self.__parse_signal_validity(
+                signal_reference_elem.find("validity")),
         )
 
     def parse(self, path):
@@ -1684,7 +1731,8 @@ class RoadMap:
                 )
                 junction.paths.append(int(c.get("connectingRoad")))
             if not junction.paths:
-                warn(f"junction {junction.id_} has no connecting roads; skipping it")
+                warn(
+                    f"junction {junction.id_} has no connecting roads; skipping it")
                 continue
             self.junctions[junction.id_] = junction
 
@@ -1701,7 +1749,8 @@ class RoadMap:
         self.elidedRoads = {}
         for r in root.iter("road"):
             road = Road(
-                r.get("name"), int(r.get("id")), float(r.get("length")), r.get("junction")
+                r.get("name"), int(r.get("id")), float(
+                    r.get("length")), r.get("junction")
             )
             link = r.find("link")
             if link is not None:
@@ -1718,7 +1767,8 @@ class RoadMap:
                     " geometry may contain artifacts"
                 )
                 if self.elide_short_roads:
-                    warn(f"attempting to elide road {road.id_} of length {road.length}")
+                    warn(
+                        f"attempting to elide road {road.id_} of length {road.length}")
                     assert road.junction is None
                     self.elidedRoads[road.id_] = road
                     if pred_link:
@@ -1776,7 +1826,8 @@ class RoadMap:
                     p_range = curve_elem.get("pRange")
                     if p_range and p_range != "normalized":
                         # TODO support arcLength
-                        raise NotImplementedError("unsupported pRange for paramPoly3")
+                        raise NotImplementedError(
+                            "unsupported pRange for paramPoly3")
                     else:
                         p_range = 1
                     curve = ParamCubic(
@@ -1799,7 +1850,8 @@ class RoadMap:
                         f"planView of road {road.id_} has inconsistent length"
                     )
                 if l < 0:
-                    raise ValueError(f"planView of road {road.id_} is not in order")
+                    raise ValueError(
+                        f"planView of road {road.id_} is not in order")
                 elif l < 1e-6:
                     warn(
                         f"road {road.id_} reference line has a geometry of "
@@ -1839,7 +1891,8 @@ class RoadMap:
 
             def popLastSectionIfShort(l):
                 if l < 1e-6:
-                    warn(f"road {road.id_} has a lane section of length {l}; skipping it")
+                    warn(
+                        f"road {road.id_} has a lane section of length {l}; skipping it")
 
                     # delete the length-0 section and re-link lanes appropriately
                     badSec = road.lane_secs.pop()
@@ -1850,7 +1903,8 @@ class RoadMap:
                                 lane.succ = badSec.lanes[lane.succ].succ
                     else:
                         if road.remappedStartLanes is None:
-                            road.remappedStartLanes = {l: l for l in badSec.lanes}
+                            road.remappedStartLanes = {
+                                l: l for l in badSec.lanes}
                         for start, current in road.remappedStartLanes.items():
                             road.remappedStartLanes[start] = badSec.lanes[current].succ
                     return badSec
@@ -1894,7 +1948,8 @@ class RoadMap:
                         road.signals.append(signal)
 
                 for signal_ref_elem in signals.iter("signalReference"):
-                    signalReference = self.__parse_signal_reference(signal_ref_elem)
+                    signalReference = self.__parse_signal_reference(
+                        signal_ref_elem)
                     if signalReference.is_valid():
                         referencedSignal = _temp_signals[signalReference.id_]
                         signal = Signal(
@@ -1906,13 +1961,14 @@ class RoadMap:
                             signalReference.validity,
                         )
                         road.signals.append(signal)
-                        
+
             # added code for parsing the crosswalks
             objs = r.find("objects")
-            if objs is not None: 
+            if objs is not None:
                 for crosswalk_elem in objs.iter("object"):
                     if crosswalk_elem.get("type") == "crosswalk":
-                        crosswalk = self.__parse_crosswalk(crosswalk_elem, road.ref_line)
+                        crosswalk = self.__parse_crosswalk(
+                            crosswalk_elem, road.ref_line)
                         road.crossings.append(crosswalk)
 
             if len(road.lane_secs) > 1:
@@ -2051,7 +2107,8 @@ class RoadMap:
                 incomingSection = None
                 if oldRoad.predecessor == jid:
                     incomingSection = incomingRoad.sections[0]
-                    remapping = self.roads[incomingID].remappedStartLanes  # could be None
+                    # could be None
+                    remapping = self.roads[incomingID].remappedStartLanes
                 if oldRoad.successor == jid:
                     assert incomingSection is None
                     incomingSection = incomingRoad.sections[-1]
@@ -2067,13 +2124,12 @@ class RoadMap:
                             incomingLaneIDs[start] = newIDs[remapped]
                     assert len(incomingLaneIDs) == len(newIDs)
 
-                
                 for road in allRoads:
                     for crossing in road.crossings:
                         if crossing.id not in seenCrossings:
                             allCrossings.append(crossing)
                             seenCrossings.add(crossing.id)
-                
+
                 # Connect incoming lanes to connecting road
                 if connection.connecting_contact == "start":
                     connectingSection = connectingRoad.sections[0]
@@ -2131,33 +2187,41 @@ class RoadMap:
                             endLane=outgoingLane,
                             intersection=None,  # will be patched once the Intersection is created
                         )
-                        
+
                         if maneuver.connectingLane.road.crossings:
                             # check the distance between the crossing an the start/end lane
                             # assign the crossing to the nearest lane road
                             connectingRoad = maneuver.connectingLane.road
                             for crossing in connectingRoad.crossings:
-                                startDistance = crossing.polygon.distance(maneuver.startLane.polygon)
-                                endDistance = crossing.polygon.distance(maneuver.endLane.polygon)
+                                startDistance = crossing.polygon.distance(
+                                    maneuver.startLane.polygon)
+                                endDistance = crossing.polygon.distance(
+                                    maneuver.endLane.polygon)
                                 if startDistance < endDistance:
                                     # append the crossing to the start lane
-                                    crossings = list(maneuver.startLane.road.crossings)
+                                    crossings = list(
+                                        maneuver.startLane.road.crossings)
                                     crossings.append(crossing)
-                                    maneuver.startLane.road.crossings = tuple(crossings)
+                                    maneuver.startLane.road.crossings = tuple(
+                                        crossings)
                                     # remove the crossing from the connecting road
                                     crossings = list(connectingRoad.crossings)
                                     crossings.remove(crossing)
-                                    object.__setattr__(connectingRoad, "crossings", tuple(crossings))
+                                    object.__setattr__(
+                                        connectingRoad, "crossings", tuple(crossings))
                                 else:
                                     # append the crossing to the end lane
-                                    crossings = list(maneuver.endLane.road.crossings)
+                                    crossings = list(
+                                        maneuver.endLane.road.crossings)
                                     crossings.append(crossing)
-                                    maneuver.endLane.road.crossings = tuple(crossings)
-                                    #remove the crossing from the connecting road
+                                    maneuver.endLane.road.crossings = tuple(
+                                        crossings)
+                                    # remove the crossing from the connecting road
                                     crossings = list(connectingRoad.crossings)
                                     crossings.remove(crossing)
-                                    object.__setattr__(connectingRoad, "crossings", tuple(crossings))
-                        
+                                    object.__setattr__(
+                                        connectingRoad, "crossings", tuple(crossings))
+
                         maneuversForLane[fromLane.lane].append(maneuver)
 
             # Gather maneuvers
@@ -2187,10 +2251,12 @@ class RoadMap:
             intersection = roadDomain.Intersection(
                 polygon=junction.poly,
                 name=junction.name,
-                uid=f"intersection{jid}",  # need prefix to prevent collisions with roads
+                # need prefix to prevent collisions with roads
+                uid=f"intersection{jid}",
                 id=jid,
                 roads=cyclicOrder(allRoads),
-                incomingLanes=cyclicOrder(allIncomingLanes, contactStart=False),
+                incomingLanes=cyclicOrder(
+                    allIncomingLanes, contactStart=False),
                 outgoingLanes=cyclicOrder(allOutgoingLanes, contactStart=True),
                 maneuvers=tuple(allManeuvers),
                 signals=tuple(allSignals),
@@ -2226,11 +2292,13 @@ class RoadMap:
                 crossing.road = road
                 if road.forwardLanes:
                     if road.forwardLanes._sidewalk:
-                        object.__setattr__(crossing, "startSidewalk", road.forwardLanes._sidewalk)
+                        object.__setattr__(
+                            crossing, "startSidewalk", road.forwardLanes._sidewalk)
                 if road.backwardLanes:
                     if road.backwardLanes._sidewalk:
-                        object.__setattr__(crossing, "endSidewalk", road.backwardLanes._sidewalk)
-                    
+                        object.__setattr__(
+                            crossing, "endSidewalk", road.backwardLanes._sidewalk)
+
         connectingRoads = tuple(connectingRoads.values())
         allRoads = roads + connectingRoads
         groups = []
@@ -2241,7 +2309,8 @@ class RoadMap:
                 groups.append(road.backwardLanes)
         lanes = [lane for road in allRoads for lane in road.lanes]
         intersections = tuple(intersections.values())
-        crossings = [crossing for road in allRoads for crossing in road.crossings]
+        crossings = [
+            crossing for road in allRoads for crossing in road.crossings]
         sidewalks, shoulders = [], []
         for group in groups:
             sidewalk = group._sidewalk
@@ -2263,7 +2332,7 @@ class RoadMap:
 
         for crossing in crossings:
             register(crossing)
-        
+
         def combine(regions):
             return PolygonalRegion.unionAll(regions, buf=self.tolerance)
 

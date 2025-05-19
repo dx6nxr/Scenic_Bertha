@@ -39,7 +39,7 @@ behavior WalkForwardBehavior():
 behavior ConstantThrottleBehavior(x):
     take SetThrottleAction(x)
 
-behavior FollowLaneBehavior(target_speed = 10, laneToFollow=None, turn_speed=None, is_oppositeTraffic=False):
+behavior FollowLaneBehavior(target_speed = 10, laneToFollow=None, is_oppositeTraffic=False, side="middle"):
     """ 
     Follow's the lane on which the vehicle is at, unless the laneToFollow is specified.
     Once the vehicle reaches an intersection, by default, the vehicle will take the straight route.
@@ -60,24 +60,37 @@ behavior FollowLaneBehavior(target_speed = 10, laneToFollow=None, turn_speed=Non
     else:
         current_lane = laneToFollow
 
-    current_centerline = current_lane.centerline
+    if side == "middle":
+        current_centerline = current_lane.centerline
+    elif side == "left":
+        current_centerline = current_lane.leftDrivingEdge
+    elif side == "right":
+        current_centerline = current_lane.rightDrivingEdge
+
     in_turning_lane = False # assumption that the agent is not instantiated within a connecting lane
     intersection_passed = False
     entering_intersection = False # assumption that the agent is not instantiated within an intersection
     end_lane = None
     original_target_speed = target_speed
-    if turn_speed is None:
-        TARGET_SPEED_FOR_TURNING = target_speed / 2
-    else:
-        TARGET_SPEED_FOR_TURNING = 5 # KM/H
+    TARGET_SPEED_FOR_TURNING = 5 # KM/H
     TRIGGER_DISTANCE_TO_SLOWDOWN = 10 # FOR TURNING AT INTERSECTIONS
 
     if current_lane.maneuvers != ():
         nearby_intersection = current_lane.maneuvers[0].intersection
         if nearby_intersection == None:
-            nearby_intersection = current_lane.centerline[-1]
+            if side == "middle":
+                nearby_intersection = current_lane.centerline[-1]
+            elif side == "left":
+                nearby_intersection = current_lane.leftDrivingEdge[-1]
+            elif side == "right":
+                nearby_intersection = current_lane.rightDrivingEdge[-1]
     else:
-        nearby_intersection = current_lane.centerline[-1]
+        if side == "middle":
+            nearby_intersection = current_lane.centerline[-1]
+        elif side == "left":
+            nearby_intersection = current_lane.leftDrivingEdge[-1]
+        elif side == "right":
+            nearby_intersection = current_lane.rightDrivingEdge[-1]
     
     # instantiate longitudinal and lateral controllers
     _lon_controller, _lat_controller = simulation().getLaneFollowingControllers(self)
@@ -105,10 +118,22 @@ behavior FollowLaneBehavior(target_speed = 10, laneToFollow=None, turn_speed=Non
 
             # assumption: there always will be a maneuver
             if select_maneuver.connectingLane != None:
-                current_centerline = concatenateCenterlines([current_centerline, select_maneuver.connectingLane.centerline, \
-                    select_maneuver.endLane.centerline])
+                if side == "middle":
+                    current_centerline = concatenateCenterlines([current_centerline, select_maneuver.connectingLane.centerline, \
+                        select_maneuver.endLane.centerline])
+                elif side == "left":
+                    current_centerline = concatenateCenterlines([current_centerline, select_maneuver.connectingLane.leftDrivingEdge, \
+                        select_maneuver.endLane.leftDrivingEdge])
+                elif side == "right":
+                    current_centerline = concatenateCenterlines([current_centerline, select_maneuver.connectingLane.rightDrivingEdge, \
+                        select_maneuver.endLane.rightDrivingEdge])
             else:
-                current_centerline = concatenateCenterlines([current_centerline, select_maneuver.endLane.centerline])
+                if side == "middle":
+                    current_centerline = concatenateCenterlines([current_centerline, select_maneuver.endLane.centerline])
+                elif side == "left":
+                    current_centerline = concatenateCenterlines([current_centerline, select_maneuver.endLane.leftDrivingEdge])
+                elif side == "right":
+                    current_centerline = concatenateCenterlines([current_centerline, select_maneuver.endLane.rightDrivingEdge])
 
             current_lane = select_maneuver.endLane
             end_lane = current_lane
@@ -116,9 +141,19 @@ behavior FollowLaneBehavior(target_speed = 10, laneToFollow=None, turn_speed=Non
             if current_lane.maneuvers != ():
                 nearby_intersection = current_lane.maneuvers[0].intersection
                 if nearby_intersection == None:
-                    nearby_intersection = current_lane.centerline[-1]
+                    if side == "middle":
+                        nearby_intersection = current_lane.centerline[-1]
+                    elif side == "left":
+                        nearby_intersection = current_lane.leftDrivingEdge[-1]
+                    elif side == "right":
+                        nearby_intersection = current_lane.rightDrivingEdge[-1]
             else:
-                nearby_intersection = current_lane.centerline[-1]
+                if side == "middle":
+                    nearby_intersection = current_lane.centerline[-1]
+                elif side == "left":
+                    nearby_intersection = current_lane.leftDrivingEdge[-1]
+                elif side == "right":
+                    nearby_intersection = current_lane.rightDrivingEdge[-1]
 
             if select_maneuver.type != ManeuverType.STRAIGHT:
                 in_turning_lane = True
@@ -145,125 +180,6 @@ behavior FollowLaneBehavior(target_speed = 10, laneToFollow=None, turn_speed=Non
         # compute throttle : Longitudinal Control
         throttle = _lon_controller.run_step(speed_error)
 
-       # Initialize smoothed_steer_angle somewhere in your code, possibly the same as the initial steer angle
-        smoothed_steer_angle = 0  # Example initialization
-
-        # Define the smoothing factor
-        alpha = 0.8  # Example value, adjust based on testing
-
-        # Inside your loop or function where you update the steering angle
-        current_steer_angle = _lat_controller.run_step(cte)
-        smoothed_steer_angle = alpha * current_steer_angle + (1 - alpha) * smoothed_steer_angle
-
-        # Use smoothed_steer_angle for steering actions
-
-        take RegulatedControlAction(throttle, smoothed_steer_angle, past_steer_angle)
-        past_steer_angle = current_steer_angle
-        past_speed = current_speed
-
-behavior FollowLaneRightEdgeBehavior(target_speed = 10, laneToFollow=None, is_oppositeTraffic=False):
-    """ 
-    Follow's the lane on which the vehicle is at, unless the laneToFollow is specified.
-    Once the vehicle reaches an intersection, by default, the vehicle will take the straight route.
-    If straight route is not available, then any availble turn route will be taken, uniformly randomly. 
-    If turning at the intersection, the vehicle will slow down to make the turn, safely. 
-
-    This behavior does not terminate. A recommended use of the behavior is to accompany it with condition,
-    e.g. do FollowLaneBehavior() until ...
-
-    :param target_speed: Its unit is in m/s. By default, it is set to 10 m/s
-    :param laneToFollow: If the lane to follow is different from the lane that the vehicle is on, this parameter can be used to specify that lane. By default, this variable will be set to None, which means that the vehicle will follow the lane that it is currently on.
-    """
-
-    past_steer_angle = 0
-    past_speed = 0 # making an assumption here that the agent starts from zero speed
-    if laneToFollow is None:
-        current_lane = self.lane
-    else:
-        current_lane = laneToFollow
-
-    current_rightEdge = current_lane.rightDrivingEdge  
-    in_turning_lane = False # assumption that the agent is not instantiated within a connecting lane
-    intersection_passed = False
-    entering_intersection = False # assumption that the agent is not instantiated within an intersection
-    end_lane = None
-    original_target_speed = target_speed
-    TARGET_SPEED_FOR_TURNING = target_speed # KM/H
-    TRIGGER_DISTANCE_TO_SLOWDOWN = 10 # FOR TURNING AT INTERSECTIONS
-
-    if current_lane.maneuvers != ():
-        nearby_intersection = current_lane.maneuvers[0].intersection
-        if nearby_intersection == None:
-            nearby_intersection = current_lane.rightDrivingEdge
-    else:
-        nearby_intersection = current_lane.rightDrivingEdge
-    
-    # instantiate longitudinal and lateral controllers
-    _lon_controller, _lat_controller = simulation().getLaneFollowingControllers(self)
-
-    while True:
-
-        if self.speed is not None:
-            current_speed = self.speed
-        else:
-            current_speed = past_speed
-
-        if not entering_intersection and (distance from self.position to nearby_intersection) < TRIGGER_DISTANCE_TO_SLOWDOWN:
-            entering_intersection = True
-            intersection_passed = False
-            straight_manuevers = filter(lambda i: i.type == ManeuverType.STRAIGHT, current_lane.maneuvers)
-
-            if len(straight_manuevers) > 0:
-                select_maneuver = Uniform(*straight_manuevers)
-            else:
-                if len(current_lane.maneuvers) > 0:
-                    select_maneuver = Uniform(*current_lane.maneuvers)
-                else:
-                    take SetBrakeAction(1.0)
-                    break
-
-            # assumption: there always will be a maneuver
-            if select_maneuver.connectingLane != None:
-                current_rightEdge = concatenateCenterlines([current_rightEdge, select_maneuver.connectingLane.rightDrivingEdge, \
-                    select_maneuver.endLane.rightDrivingEdge])
-            else:
-                current_rightEdge = concatenateCenterlines([current_rightEdge, select_maneuver.endLane.rightDrivingEdge])
-
-            current_lane = select_maneuver.endLane
-            end_lane = current_lane
-
-            if current_lane.maneuvers != ():
-                nearby_intersection = current_lane.maneuvers[0].intersection
-                if nearby_intersection == None:
-                    nearby_intersection = current_lane.rightDrivingEdge
-            else:
-                nearby_intersection = current_lane.rightDrivingEdge
-
-            if select_maneuver.type != ManeuverType.STRAIGHT:
-                in_turning_lane = True
-                target_speed = TARGET_SPEED_FOR_TURNING
-
-                do TurnBehavior(trajectory = current_rightEdge)
-
-
-        if (end_lane is not None) and (self.position in end_lane) and not intersection_passed:
-            intersection_passed = True
-            in_turning_lane = False
-            entering_intersection = False 
-            target_speed = original_target_speed
-            _lon_controller, _lat_controller = simulation().getLaneFollowingControllers(self)
-
-        nearest_line_points = current_rightEdge.nearestSegmentTo(self.position)
-        nearest_line_segment = PolylineRegion(nearest_line_points)
-        cte = nearest_line_segment.signedDistanceTo(self.position)
-        if is_oppositeTraffic:
-            cte = -cte
-
-        speed_error = target_speed - current_speed
-
-        # compute throttle : Longitudinal Control
-        throttle = _lon_controller.run_step(speed_error)
-
         # compute steering : Lateral Control
         current_steer_angle = _lat_controller.run_step(cte)
 
@@ -272,7 +188,7 @@ behavior FollowLaneRightEdgeBehavior(target_speed = 10, laneToFollow=None, is_op
         past_speed = current_speed
 
 
-behavior FollowTrajectoryBehavior(target_speed = 10, trajectory = None, turn_speed=None, side='center'):
+behavior FollowTrajectoryBehavior(target_speed = 10, trajectory = None, turn_speed=None, side="middle"):
     """ 
     Follows the given trajectory. The behavior terminates once the end of the trajectory is reached.
 
@@ -288,14 +204,12 @@ behavior FollowTrajectoryBehavior(target_speed = 10, trajectory = None, turn_spe
     brakeIntensity = 1.0
     distanceToEndpoint = 5 # meters
 
-    if side == 'center':
+    if side == "middle":
         traj_centerline = [traj.centerline for traj in trajectory]
-    elif side == 'right':
-        traj_centerline = [traj.rightDrivingEdge for traj in trajectory]
-    elif side == 'left':
+    elif side == "left":
         traj_centerline = [traj.leftDrivingEdge for traj in trajectory]
-    else:
-        raise ValueError("side should be either 'center', 'right', or 'left'")
+    elif side == "right":
+        traj_centerline = [traj.rightDrivingEdge for traj in trajectory] 
     trajectory_centerline = concatenateCenterlines(traj_centerline)
 
     # instantiate longitudinal and lateral controllers
