@@ -120,6 +120,9 @@ __all__ = (
     "VerifaiRange",
     "VerifaiDiscreteRange",
     "VerifaiOptions",
+    "TimeSeries",
+    "File",
+    "Files",
     # Constructible types
     "Point",
     "OrientedPoint",
@@ -199,6 +202,7 @@ from scenic.core.dynamics.guards import (
 from scenic.core.dynamics.invocables import BlockConclusion, runTryInterrupt
 from scenic.core.dynamics.scenarios import DynamicScenario
 from scenic.core.external_params import (
+    TimeSeries,
     VerifaiDiscreteRange,
     VerifaiOptions,
     VerifaiParameter,
@@ -222,6 +226,7 @@ from scenic.core.regions import (
     everywhere,
     nowhere,
 )
+from scenic.core.sensors import File, Files
 from scenic.core.shapes import (
     BoxShape,
     ConeShape,
@@ -279,6 +284,7 @@ from scenic.core.object_types import Constructible, Object2D, OrientedPoint2D, P
 import scenic.core.propositions as propositions
 from scenic.core.regions import convertToFootprint
 import scenic.core.requirements as requirements
+from scenic.core.sensors import Recorder, RecordingConfiguration
 from scenic.core.simulators import RejectSimulationException
 from scenic.core.specifiers import ModifyingSpecifier, Specifier
 from scenic.core.type_support import (
@@ -420,6 +426,8 @@ def registerObject(obj):
     elif activity > 0 or currentScenario:
         assert not evaluatingRequirement
         assert isinstance(obj, Object)
+        if currentScenario and currentScenario._isRunning:
+            raise InvalidScenarioError("tried to create an object inside a compose block")
         currentScenario._registerObject(obj)
         if currentSimulation:
             currentSimulation._createObject(obj)
@@ -559,11 +567,14 @@ def registerDynamicScenarioClass(cls):
 
 @contextmanager
 def executeInScenario(scenario, inheritEgo=False):
-    global currentScenario
+    global currentScenario, _globalParameters
     oldScenario = currentScenario
     if inheritEgo and oldScenario is not None:
         scenario._ego = oldScenario._ego  # inherit ego from parent
+        scenario._workspace = oldScenario._workspace
     currentScenario = scenario
+    oldParams = _globalParameters
+    _globalParameters = scenario._globalParameters
     try:
         yield
     except AttributeError as e:
@@ -578,6 +589,7 @@ def executeInScenario(scenario, inheritEgo=False):
             raise
     finally:
         currentScenario = oldScenario
+        _globalParameters = oldParams
 
 
 def prepareScenario(scenario):
@@ -765,10 +777,52 @@ def require_monitor(reqID, value, line, name):
         )
 
 
-def record(reqID, value, line, name):
+def record(reqID, value, line, name, recorder=None, period=None, delay=None):
     if not name:
         name = f"record{line}"
-    makeRequirement(requirements.RequirementType.record, reqID, value, line, name)
+    if recorder is not None:
+        if isinstance(recorder, str):
+            recorder = Recorder._forPattern(recorder)
+        if not isinstance(recorder, Recorder):
+            raise TypeError(
+                f'"record X to Y" on line {line} with Y not a str or Recorder'
+            )
+    if period is not None:
+        val, unit = period
+        if not isinstance(val, numbers.Real):
+            raise TypeError(
+                f'period of "record" statement on line {line} must be a number'
+            )
+        if val <= 0:
+            raise ValueError(
+                f'period of "record" statement on line {line} must be positive'
+            )
+        if unit == "steps" and not isinstance(val, int):
+            raise TypeError(
+                f'"record every X steps" on line {line} with X not an integer'
+            )
+    else:
+        period = (1, "steps")
+    if delay is not None:
+        val, unit = delay
+        if not isinstance(val, numbers.Real):
+            raise TypeError(
+                f'delay of "record" statement on line {line} must be a number'
+            )
+        if val < 0:
+            raise ValueError(
+                f'delay of "record" statement on line {line} must be nonnegative'
+            )
+        if unit == "steps" and not isinstance(val, int):
+            raise TypeError(
+                f'"record after X steps" on line {line} with X not an integer'
+            )
+    else:
+        delay = (0, "steps")
+    config = RecordingConfiguration(
+        name=name, recorder=recorder, period=period, delay=delay
+    )
+    makeRequirement(requirements.RequirementType.record, reqID, value, line, name, config)
 
 
 def record_initial(reqID, value, line, name):
@@ -815,7 +869,7 @@ def terminate_simulation_when(reqID, req, line, name):
     )
 
 
-def makeRequirement(ty, reqID, req, line, name):
+def makeRequirement(ty, reqID, req, line, name, recConfig=None):
     if evaluatingRequirement:
         raise InvalidScenarioError(f'tried to use "{ty.value}" inside a requirement')
     elif currentBehavior is not None:
@@ -823,7 +877,7 @@ def makeRequirement(ty, reqID, req, line, name):
     elif currentSimulation is not None:
         currentScenario._addDynamicRequirement(ty, req, line, name)
     else:  # requirement being defined at compile time
-        currentScenario._addRequirement(ty, reqID, req, line, name, 1)
+        currentScenario._addRequirement(ty, reqID, req, line, name, 1, recConfig)
 
 
 def terminate_after(timeLimit, terminator=None):

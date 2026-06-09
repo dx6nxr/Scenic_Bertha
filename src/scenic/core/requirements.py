@@ -39,12 +39,13 @@ class RequirementType(enum.Enum):
 
 
 class PendingRequirement:
-    def __init__(self, ty, condition, line, prob, name, ego):
+    def __init__(self, ty, condition, line, prob, name, ego, recConfig, scenario):
         self.ty = ty
         self.condition = condition
         self.line = line
         self.prob = prob
         self.name = name
+        self.recConfig = recConfig
 
         # the translator wrapped the requirement in a lambda to prevent evaluation,
         # so we need to save the current values of all referenced names; we save
@@ -67,6 +68,10 @@ class PendingRequirement:
                 assert globs is atomGlobals
             else:
                 atomGlobals = globs
+        for cell in self.cells:
+            # save current values of scenario locals (only needed for top-level scenario)
+            if cell.cell_contents is scenario:
+                cell.cell_contents = scenario._makeLocalsSnapshot()
         self.egoObject = ego
 
     def compile(self, namespace, scenario, syntax=None):
@@ -187,6 +192,7 @@ class BoundRequirement:
         self.closure = compiledReq.closure
         self.line = compiledReq.line
         self.name = compiledReq.name
+        self.recConfig = compiledReq.recConfig
         self.sample = sample
         self.compiledReq = compiledReq
         self.proposition = proposition
@@ -440,6 +446,7 @@ class CompiledRequirement(SamplingRequirement):
         self.line = pendingReq.line
         self.name = pendingReq.name
         self.prob = pendingReq.prob
+        self.recConfig = pendingReq.recConfig
         self.dependencies = dependencies
         self.proposition = proposition
 
